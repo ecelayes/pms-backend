@@ -55,10 +55,11 @@ test-prepare:
 
 test-all: test-prepare
 	@echo "Running ALL Tests"
-	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/...
+	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -skip TestLifecycleSuite
+	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -run TestLifecycleSuite
 
 test-unit: test-prepare
-	@echo "Running Tests (Skipping Lifecycle)..."
+	@echo "Running Unit Tests"
 	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -skip TestLifecycleSuite
 
 test-lifecycle: test-prepare
@@ -93,7 +94,7 @@ docker-down:
 	docker-compose down
 
 docker-db-reset:
-	@echo "Resetting Docker DB..."
+	@echo "Resetting Docker DB"
 	@sleep 2
 	docker exec -i pms-db psql -U $(DB_USER) -d $(DB_NAME) -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 	cat migrations/*.up.sql | docker exec -i pms-db psql -U $(DB_USER) -d $(DB_NAME)
