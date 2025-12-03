@@ -35,6 +35,7 @@ To run this project, you need to have the following installed:
 
 Create a .env file in the project root by copying the following content:
 
+```bash
 DB_USER=postgres
 DB_PASSWORD=postgres
 DB_HOST=localhost
@@ -44,6 +45,7 @@ DB_NAME=hotel_pms_db
 DB_TEST_NAME=hotel_pms_test
 
 PORT=8081
+```
 
 # JWT_SECRET is not required as we use dynamic salts per user in the DB
 
@@ -56,27 +58,45 @@ The project includes a Makefile to simplify all common tasks.
 Starts the database and the API in isolated containers. The API will be available on port 4000.
 
 1. Start services:
-   make docker-up
+
+  ```bash
+  make docker-up
+  ```
 
 2. Initialize database (Only the first time or to reset):
    Creates the schema, applies migrations, and loads seed data.
-   make docker-db-reset
+
+  ```bash
+  make docker-db-reset
+  ```
 
 3. View logs:
-   make docker-logs
+
+  ```bash
+  make docker-logs
+  ```
 
 4. Stop services:
-   make docker-down
+
+  ```bash
+  make docker-down
+  ```
 
 ### Option B: Local Execution (Development)
 
 Requires a locally running PostgreSQL instance on port 5432.
 
 1. Prepare local database:
-   make db-reset
+
+  ```bash
+  make db-reset
+  ```
 
 2. Start the server (Hot reload not included, restart manually):
-   make run
+
+  ```bash
+  make run
+  ```
 
 The server will listen on the port defined in .env (default 8081).
 
@@ -85,25 +105,37 @@ The server will listen on the port defined in .env (default 8081).
 The project features an integration test suite (End-to-End) that validates complete business flows against a real test database.
 
 - Run all tests:
+
+  ```bash
   make test-all
+  ```
 
 - Run only unit tests (without DB):
+
+  ```bash
   make test-unit
+  ```
 
 - Run only the lifecycle test (Full flow):
+
+  ```bash
   make test-lifecycle
+  ```
 
 ## Project Structure
 
-/cmd
-  /api          # Entry point (main.go)
-/internal
-  /bootstrap    # Configuration and dependency injection
-  /entity       # Domain models and errors
-  /handler      # HTTP Controllers (JSON Input/Output)
-  /usecase      # Pure business logic
-  /repository   # Data access (SQL queries)
-  /security     # Authentication middlewares and utilities
-/migrations     # SQL scripts for DB structure
-/scripts        # Seed data
-/tests          # E2E integration tests
+```text
+pms-core/
+├── cmd/
+│   └── /api          # Entry point (main.go)
+├── internal/
+│   ├── bootstrap/    # Configuration and dependency injection
+│   ├── entity/       # Domain models and errors
+│   ├── handler/      # HTTP Controllers (JSON Input/Output)
+│   ├── usecase/      # Pure business logic
+│   ├── repository/   # Data access (SQL queries)
+│   └── security/     # Authentication middlewares and utilities
+├── migrations/       # SQL scripts for DB structure
+├── scripts/          # Seed data
+└── tests/            # E2E integration tests
+```
