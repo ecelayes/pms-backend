@@ -10,7 +10,8 @@ DB_DSN := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?
 TEST_DB_DSN := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_TEST_NAME)?sslmode=disable
 DB_ADMIN_DSN := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/postgres?sslmode=disable
 
-.PHONY: help run build test clean db-up db-seed db-reset test-prepare test-all test-unit test-lifecycle test-run docker-up docker-down docker-db-reset
+.PHONY: help run build test clean db-up db-seed db-reset test-prepare test-all test-unit docker-up docker-down docker-db-reset \
+        test-lifecycle test-hotel test-auth test-room test-pricing test-reservation
 
 help:
 	@echo 'Usage: make [target]'
@@ -18,7 +19,7 @@ help:
 
 # --- APP ---
 run:
-	@echo "Starting $(APP_NAME)..."
+	@echo "Starting $(APP_NAME)"
 	go run cmd/api/main.go
 
 build:
@@ -30,15 +31,15 @@ clean:
 
 # --- DATABASE ---
 db-up:
-	@echo "Applying schema to $(DB_NAME)..."
+	@echo "Applying schema to $(DB_NAME)"
 	@cat migrations/*.up.sql | psql "$(DB_DSN)"
 
 db-seed:
-	@echo "Seeding data..."
+	@echo "Seeding data"
 	@cat scripts/seed_data.sql | psql "$(DB_DSN)"
 
 db-reset:
-	@echo "Resetting Database $(DB_NAME)..."
+	@echo "Resetting Database $(DB_NAME)"
 	psql "$(DB_DSN)" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 	@make db-up
 	@make db-seed
@@ -46,28 +47,43 @@ db-reset:
 
 # --- TESTING ---
 test-prepare:
-	@echo "Preparing Test Database: $(DB_TEST_NAME)..."
+	@echo "Preparing Test Database: $(DB_TEST_NAME)"
 	@psql "$(DB_ADMIN_DSN)" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$(DB_TEST_NAME)' AND pid <> pg_backend_pid();" || true
 	@psql "$(DB_ADMIN_DSN)" -c "DROP DATABASE IF EXISTS $(DB_TEST_NAME);"
 	@psql "$(DB_ADMIN_DSN)" -c "CREATE DATABASE $(DB_TEST_NAME);"
 	@make db-up DB_DSN="$(TEST_DB_DSN)"
 
 test-all: test-prepare
-	@echo "Running ALL Tests..."
-	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./...
+	@echo "Running ALL Tests"
+	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/...
 
-test-unit:
-	@echo "Running Unit Tests..."
-	go test -v ./internal/...
+test-unit: test-prepare
+	@echo "Running Tests (Skipping Lifecycle)..."
+	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -skip TestLifecycleSuite
 
 test-lifecycle: test-prepare
-	@echo "Running Lifecycle E2E..."
-	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/ -run TestLifecycleSuite
+	@echo "Running Lifecycle Test"
+	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -run TestLifecycleSuite
 
-test-run: test-prepare
-	@if [ -z "$(name)" ]; then echo "Error: define name. Ej: make test-run name=TestHotelSuite"; exit 1; fi
-	@echo "Running Specific Test: $(name)..."
-	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./... -run $(name)
+test-auth: test-prepare
+	@echo "Running Auth Tests"
+	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -run TestAuthSuite
+
+test-hotel: test-prepare
+	@echo "Running Hotel Tests"
+	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -run TestHotelSuite
+
+test-room: test-prepare
+	@echo "Running Room Tests"
+	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -run TestRoomSuite
+
+test-pricing: test-prepare
+	@echo "Running Pricing Tests"
+	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -run TestPricingSuite
+
+test-reservation: test-prepare
+	@echo "Running Reservation Tests"
+	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -run TestReservationSuite
 
 # --- DOCKER ---
 docker-up:
