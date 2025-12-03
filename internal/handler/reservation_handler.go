@@ -20,27 +20,41 @@ func NewReservationHandler(uc *usecase.ReservationUseCase) *ReservationHandler {
 func (h *ReservationHandler) Create(c echo.Context) error {
 	var req entity.CreateReservationRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
 
-	id, err := h.uc.Create(c.Request().Context(), req)
+	code, err := h.uc.Create(c.Request().Context(), req)
 	if err != nil {
 		switch {
-		case errors.Is(err, entity.ErrInvalidDateRange), 
-		     errors.Is(err, entity.ErrInvalidDateFormat):
+		case errors.Is(err, entity.ErrInvalidDateFormat), 
+		     errors.Is(err, entity.ErrInvalidDateRange):
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
-			
-		case errors.Is(err, entity.ErrNoAvailability), 
-		     errors.Is(err, entity.ErrPriceChanged):
+		case errors.Is(err, entity.ErrNoAvailability):
 			return c.JSON(http.StatusConflict, map[string]string{"error": err.Error()})
-
 		case errors.Is(err, entity.ErrRoomTypeNotFound):
 			return c.JSON(http.StatusNotFound, map[string]string{"error": err.Error()})
-			
 		default:
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		}
 	}
 
-	return c.JSON(http.StatusCreated, map[string]string{"reservation_id": id})
+	return c.JSON(http.StatusCreated, map[string]string{"reservation_code": code})
+}
+
+func (h *ReservationHandler) GetByCode(c echo.Context) error {
+	code := c.Param("code")
+	res, err := h.uc.GetByCode(c.Request().Context(), code)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "reservation not found"})
+	}
+	return c.JSON(http.StatusOK, res)
+}
+
+func (h *ReservationHandler) Cancel(c echo.Context) error {
+	id := c.Param("id") // TODO: Here it is still by internal UUID for operations, or it could be by code.
+	err := h.uc.Cancel(c.Request().Context(), id)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "cancelled"})
 }

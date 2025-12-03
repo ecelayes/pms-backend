@@ -5,6 +5,7 @@ endif
 
 APP_NAME=pms-backend
 DB_DSN=$(DATABASE_URL)
+DB_TEST_DSN=$(TEST_DATABASE_URL)
 
 .PHONY: help run build test clean db-up db-seed db-reset
 
@@ -38,7 +39,7 @@ db-check:
 
 db-up: db-check
 	@echo "Applying schema"
-	psql "$(DB_DSN)" -f migrations/001_initial_schema.up.sql
+	@cat migrations/*.up.sql | psql "$(DB_DSN)"
 
 db-seed: db-check
 	@echo "Seeding data"
@@ -50,3 +51,18 @@ db-reset: db-check
 	@make db-up
 	@make db-seed
 	@echo "Database ready for testing!"
+
+# ==============================================================================
+# Testing Helpers
+# ==============================================================================
+
+test-prepare:
+	@echo "Preparing Test Database"
+	psql "$(DB_TEST_DSN)" -c "DROP DATABASE IF EXISTS hotel_pms_test;"
+	psql "$(DB_TEST_DSN)" -c "CREATE DATABASE hotel_pms_test;"
+	
+	@make db-up DATABASE_URL="$(DB_TEST_DSN)"
+
+test-e2e: test-prepare
+	@echo "Running E2E Tests"
+	export TEST_DATABASE_URL="$(DB_TEST_DSN)"; go test -v ./tests/...

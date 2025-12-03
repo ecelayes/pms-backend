@@ -17,6 +17,10 @@ func NewAvailabilityUseCase(repo *repository.RoomRepository) *AvailabilityUseCas
 }
 
 func (uc *AvailabilityUseCase) Search(ctx context.Context, start, end time.Time) ([]entity.AvailabilitySearch, error) {
+	if !end.After(start) {
+		return nil, entity.ErrInvalidDateRange
+	}
+
 	roomTypes, err := uc.repo.GetAllRoomTypes(ctx)
 	if err != nil {
 		return nil, err
@@ -27,7 +31,7 @@ func (uc *AvailabilityUseCase) Search(ctx context.Context, start, end time.Time)
 	for _, rt := range roomTypes {
 		reservedCount, err := uc.repo.CountReservations(ctx, nil, rt.ID, start, end)
 		if err != nil {
-				return nil, err
+			return nil, err
 		}
 
 		available := rt.TotalQuantity - reservedCount
@@ -42,20 +46,19 @@ func (uc *AvailabilityUseCase) Search(ctx context.Context, start, end time.Time)
 
 		daysRequested := int(end.Sub(start).Hours() / 24)
 		if len(dailyRates) != daysRequested {
-			// Missing prices for some dates -> Room is not bookable
 			continue
 		}
 
-		var total float64
+		var totalPrice float64
 		for _, r := range dailyRates {
-			total += r.Price
+			totalPrice += r.Price
 		}
 
 		results = append(results, entity.AvailabilitySearch{
 			RoomTypeID:   rt.ID,
 			RoomTypeName: rt.Name,
 			AvailableQty: available,
-			TotalPrice:   total,
+			TotalPrice:   totalPrice,
 			NightlyRates: dailyRates,
 		})
 	}

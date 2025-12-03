@@ -1,17 +1,23 @@
 package entity
 
+import "time"
+
 type RoomType struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	TotalQuantity int    `json:"total_quantity"`
+	ID            string    `json:"id"`
+	HotelID       string    `json:"hotel_id"`
+	Name          string    `json:"name"`
+	Code          string    `json:"code"`
+	TotalQuantity int       `json:"total_quantity"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type AvailabilitySearch struct {
-	RoomTypeID   string       `json:"room_type_id"`
-	RoomTypeName string       `json:"room_type_name"`
-	AvailableQty int          `json:"available_qty"`
-	TotalPrice   float64      `json:"total_price"`
-	NightlyRates []DailyRate  `json:"nightly_rates"`
+	RoomTypeID   string      `json:"room_type_id"`
+	RoomTypeName string      `json:"room_type_name"`
+	AvailableQty int         `json:"available_qty"`
+	TotalPrice   float64     `json:"total_price"`
+	NightlyRates []DailyRate `json:"nightly_rates"`
 }
 
 type DailyRate struct {

@@ -1,43 +1,52 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/ecelayes/pms-backend/internal/entity"
 	"github.com/ecelayes/pms-backend/internal/usecase"
 )
 
 type AvailabilityHandler struct {
-	useCase *usecase.AvailabilityUseCase
+	uc *usecase.AvailabilityUseCase
 }
 
 func NewAvailabilityHandler(uc *usecase.AvailabilityUseCase) *AvailabilityHandler {
-	return &AvailabilityHandler{useCase: uc}
+	return &AvailabilityHandler{uc: uc}
 }
 
 func (h *AvailabilityHandler) Get(c echo.Context) error {
 	startStr := c.QueryParam("start")
 	endStr := c.QueryParam("end")
 
+	if startStr == "" || endStr == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "start and end dates are required"})
+	}
+
 	layout := "2006-01-02"
 	start, err := time.Parse(layout, startStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid start date (YYYY-MM-DD)"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": entity.ErrInvalidDateFormat.Error()})
 	}
 	end, err := time.Parse(layout, endStr)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid end date (YYYY-MM-DD)"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": entity.ErrInvalidDateFormat.Error()})
 	}
 
-	if !end.After(start) {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "End date must be after start date"})
-	}
-
-	result, err := h.useCase.Search(c.Request().Context(), start, end)
+	results, err := h.uc.Search(c.Request().Context(), start, end)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		if errors.Is(err, entity.ErrInvalidDateRange) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{"data": result})
+	if results == nil {
+		results = []entity.AvailabilitySearch{}
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{"data": results})
 }

@@ -3,14 +3,27 @@ package entity
 import "errors"
 
 var (
-	// 400 Bad Request
-	ErrInvalidDateRange = errors.New("check-out date must be after check-in date")
+	// Input Validation
 	ErrInvalidDateFormat = errors.New("invalid date format (use YYYY-MM-DD)")
+	ErrInvalidDateRange  = errors.New("check-out date must be after check-in date")
+	ErrInvalidID         = errors.New("invalid UUID format")
+	ErrEmptyBody         = errors.New("request body cannot be empty")
+
+	// Business Rules (Booking)
+	ErrNoAvailability       = errors.New("no availability for selected dates")
+	ErrReservationNotFound  = errors.New("reservation not found")
+	ErrReservationCancelled = errors.New("reservation is already cancelled")
 	
-	// 409 Conflict
-	ErrNoAvailability = errors.New("no availability for selected dates")
-	ErrPriceChanged   = errors.New("price has changed during booking")
-	
-	// 404 Not Found
+	// Business Rules (Pricing)
+	ErrPriceNegative = errors.New("price must be positive")
+	ErrPriorityNegative = errors.New("priority cannot be negative")
+
+	// Integrity
 	ErrRoomTypeNotFound = errors.New("room type ID does not exist")
+
+	// Auth
+	ErrEmailAlreadyExists = errors.New("email is already registered")
+	ErrInvalidCredentials = errors.New("invalid email or password")
+	ErrUserNotFound       = errors.New("user not found")
+	ErrUserInactive       = errors.New("user account is inactive")
 )
