@@ -1,39 +1,39 @@
 # PMS Backend Core
 
-Backend para un sistema de gestión hotelera (Property Management System) diseñado con enfoque en escalabilidad, consistencia de datos y seguridad.
+Backend for a Hotel Management System (Property Management System) designed with a focus on scalability, data consistency, and security.
 
-El sistema utiliza una arquitectura de "Compute on Read" para el cálculo de precios y disponibilidad, evitando la desincronización de inventarios. Está construido siguiendo los principios de Clean Architecture y Multi-tenancy.
+The system utilizes a "Compute on Read" architecture for calculating prices and availability, avoiding inventory desynchronization. It is built following Clean Architecture and Multi-tenancy principles.
 
-## Tecnologías
+## Technologies
 
-- Lenguaje: Go (Golang) 1.23+
-- Base de Datos: PostgreSQL 15+
-- Framework Web: Echo v4
-- Driver SQL: pgx/v5
-- Infraestructura: Docker & Docker Compose
-- Automatización: GNU Make
+- Language: Go (Golang) 1.23+
+- Database: PostgreSQL 15+
+- Web Framework: Echo v4
+- SQL Driver: pgx/v5
+- Infrastructure: Docker & Docker Compose
+- Automation: GNU Make
 
-## Características Principales
+## Key Features
 
-- Arquitectura Limpia: Separación estricta de capas (Handler, Usecase, Repository, Entity).
-- Multi-Tenancy: Soporte para múltiples hoteles y dueños en la misma instancia.
-- Motor de Precios Dinámico: Cálculo de tarifas en tiempo real basado en reglas y prioridades.
-- Disponibilidad Transaccional: Prevención de overbooking mediante transacciones ACID y bloqueos a nivel de base de datos.
-- Seguridad Avanzada: Autenticación JWT con Salt único por usuario (permite revocación inmediata de sesiones).
-- Auditoría: Trazabilidad automática de creación y actualización (created_at, updated_at) y borrado lógico (Soft Delete).
+- Clean Architecture: Strict separation of layers (Handler, Usecase, Repository, Entity).
+- Multi-Tenancy: Support for multiple hotels and owners within the same instance.
+- Dynamic Pricing Engine: Real-time rate calculation based on rules and priorities.
+- Transactional Availability: Overbooking prevention through ACID transactions and database-level locking.
+- Advanced Security: JWT Authentication with unique Salt per user (allows immediate session revocation).
+- Audit: Automatic tracking of creation and updates (created_at, updated_at) and logical deletion (Soft Delete).
 
-## Requisitos Previos
+## Prerequisites
 
-Para ejecutar este proyecto necesitas tener instalado:
+To run this project, you need to have the following installed:
 
-1. Go 1.23 o superior
-2. Docker y Docker Compose
-3. Make (generalmente incluido en Linux/Mac, o vía Chocolatey/Scoop en Windows)
-4. Cliente PostgreSQL (psql) - Opcional pero recomendado para debugging
+1. Go 1.23 or higher
+2. Docker and Docker Compose
+3. Make (usually included in Linux/Mac, or via Chocolatey/Scoop on Windows)
+4. PostgreSQL Client (psql) - Optional but recommended for debugging
 
-## Configuración
+## Configuration
 
-Crea un archivo .env en la raíz del proyecto copiando el siguiente contenido:
+Create a .env file in the project root by copying the following content:
 
 DB_USER=postgres
 DB_PASSWORD=postgres
@@ -43,67 +43,67 @@ DB_PORT=5432
 DB_NAME=hotel_pms_db
 DB_TEST_NAME=hotel_pms_test
 
-PORT=8080
+PORT=8081
 
-# No se requiere JWT_SECRET ya que usamos sales dinámicas por usuario en la DB
+# JWT_SECRET is not required as we use dynamic salts per user in the DB
 
-## Ejecución del Proyecto
+## Running the Project
 
-El proyecto incluye un Makefile para simplificar todas las tareas comunes.
+The project includes a Makefile to simplify all common tasks.
 
-### Opción A: Ejecución con Docker (Recomendada)
+### Option A: Running with Docker (Recommended)
 
-Levanta la base de datos y la API en contenedores aislados. La API estará disponible en el puerto 4000.
+Starts the database and the API in isolated containers. The API will be available on port 4000.
 
-1. Levantar servicios:
+1. Start services:
    make docker-up
 
-2. Inicializar base de datos (Solo la primera vez o para reiniciar):
-   Crea el esquema, aplica migraciones y carga datos de prueba.
+2. Initialize database (Only the first time or to reset):
+   Creates the schema, applies migrations, and loads seed data.
    make docker-db-reset
 
-3. Ver logs:
+3. View logs:
    make docker-logs
 
-4. Detener servicios:
+4. Stop services:
    make docker-down
 
-### Opción B: Ejecución Local (Desarrollo)
+### Option B: Local Execution (Development)
 
-Requiere tener una instancia de PostgreSQL corriendo localmente en el puerto 5432.
+Requires a locally running PostgreSQL instance on port 5432.
 
-1. Preparar base de datos local:
+1. Prepare local database:
    make db-reset
 
-2. Iniciar el servidor (Hot reload no incluido, reiniciar manualmente):
+2. Start the server (Hot reload not included, restart manually):
    make run
 
-El servidor escuchará en el puerto definido en el .env (por defecto 8081).
+The server will listen on the port defined in .env (default 8081).
 
 ## Testing
 
-El proyecto cuenta con una suite de tests de integración (End-to-End) que valida los flujos de negocio completos contra una base de datos real de prueba.
+The project features an integration test suite (End-to-End) that validates complete business flows against a real test database.
 
-- Ejecutar todos los tests:
+- Run all tests:
   make test-all
 
-- Ejecutar solo tests unitarios (sin DB):
+- Run only unit tests (without DB):
   make test-unit
 
-- Ejecutar solo el test de ciclo de vida (Flujo completo):
+- Run only the lifecycle test (Full flow):
   make test-lifecycle
 
-## Estructura del Proyecto
+## Project Structure
 
 /cmd
-  /api          # Punto de entrada (main.go)
+  /api          # Entry point (main.go)
 /internal
-  /bootstrap    # Configuración e inyección de dependencias
-  /entity       # Modelos de dominio y errores
-  /handler      # Controladores HTTP (Entrada/Salida JSON)
-  /usecase      # Lógica de negocio pura
-  /repository   # Acceso a datos (SQL queries)
-  /security     # Middlewares y utilidades de autenticación
-/migrations     # Scripts SQL para estructura de la DB
-/scripts        # Datos semilla (Seed data)
-/tests          # Tests de integración E2E
+  /bootstrap    # Configuration and dependency injection
+  /entity       # Domain models and errors
+  /handler      # HTTP Controllers (JSON Input/Output)
+  /usecase      # Pure business logic
+  /repository   # Data access (SQL queries)
+  /security     # Authentication middlewares and utilities
+/migrations     # SQL scripts for DB structure
+/scripts        # Seed data
+/tests          # E2E integration tests
