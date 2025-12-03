@@ -3,7 +3,8 @@ package entity
 import "time"
 
 type PriceRule struct {
-	ID         string    `json:"id"`
+	BaseEntity
+	
 	RoomTypeID string    `json:"room_type_id"`
 	Start      time.Time `json:"start"`
 	End        time.Time `json:"end"`
@@ -13,8 +14,13 @@ type PriceRule struct {
 
 type CreatePriceRuleRequest struct {
 	RoomTypeID string  `json:"room_type_id"`
-	Start      string  `json:"start"` // YYYY-MM-DD
-	End        string  `json:"end"`   // YYYY-MM-DD
+	Start      string  `json:"start"`
+	End        string  `json:"end"`
 	Price      float64 `json:"price"`
 	Priority   int     `json:"priority"`
+}
+
+type UpdatePriceRuleRequest struct {
+	Price    float64 `json:"price"`
+	Priority int     `json:"priority"`
 }

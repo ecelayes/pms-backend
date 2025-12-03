@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -24,10 +23,8 @@ func (r *UserRepository) Create(ctx context.Context, email, password, salt, role
 	_, err := r.db.Exec(ctx, query, email, password, salt, role)
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) {
-			if pgErr.Code == "23505" {
-				return entity.ErrEmailAlreadyExists
-			}
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return entity.ErrEmailAlreadyExists
 		}
 		return fmt.Errorf("db error: %w", err)
 	}
@@ -36,9 +33,8 @@ func (r *UserRepository) Create(ctx context.Context, email, password, salt, role
 
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*entity.User, error) {
 	var u entity.User
-	query := `SELECT id, email, password, salt, role FROM users WHERE email=$1`
-	err := r.db.QueryRow(ctx, query, email).
-		Scan(&u.ID, &u.Email, &u.Password, &u.Salt, &u.Role)
+	query := `SELECT id, email, password, salt, role FROM users WHERE email=$1 AND deleted_at IS NULL`
+	err := r.db.QueryRow(ctx, query, email).Scan(&u.ID, &u.Email, &u.Password, &u.Salt, &u.Role)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, entity.ErrInvalidCredentials
@@ -50,7 +46,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*entity.
 
 func (r *UserRepository) GetSaltByID(ctx context.Context, userID string) (string, error) {
 	var salt string
-	query := `SELECT salt FROM users WHERE id=$1`
+	query := `SELECT salt FROM users WHERE id=$1 AND deleted_at IS NULL`
 	err := r.db.QueryRow(ctx, query, userID).Scan(&salt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

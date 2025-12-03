@@ -56,9 +56,24 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	protected := v1.Group("")
 	protected.Use(security.Auth(authUC))
 	
-	protected.POST("/pricing/rules", pricingHandler.CreateRule)
+	// Hotels CRUD
 	protected.POST("/hotels", hotelHandler.Create)
+	protected.GET("/hotels", hotelHandler.ListMine)
+	protected.PUT("/hotels/:id", hotelHandler.Update)
+	protected.DELETE("/hotels/:id", hotelHandler.Delete)
+
+	// Room Types CRUD
 	protected.POST("/room-types", roomHandler.Create)
+	protected.PUT("/room-types/:id", roomHandler.Update)
+	protected.DELETE("/room-types/:id", roomHandler.Delete)
+
+	// Pricing CRUD
+	protected.POST("/pricing/rules", pricingHandler.CreateRule)
+	protected.PUT("/pricing/rules/:id", pricingHandler.UpdateRule)
+	protected.DELETE("/pricing/rules/:id", pricingHandler.DeleteRule)
+
+	// Reservation Admin
+	protected.DELETE("/reservations/:id", resHandler.Delete)
 
 	return e
 }

@@ -58,3 +58,11 @@ func (h *ReservationHandler) Cancel(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, map[string]string{"message": "cancelled"})
 }
+
+func (h *ReservationHandler) Delete(c echo.Context) error {
+	id := c.Param("id")
+	if err := h.uc.Delete(c.Request().Context(), id); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "reservation deleted"})
+}

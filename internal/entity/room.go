@@ -1,15 +1,18 @@
 package entity
 
-import "time"
-
 type RoomType struct {
-	ID            string    `json:"id"`
-	HotelID       string    `json:"hotel_id"`
-	Name          string    `json:"name"`
-	Code          string    `json:"code"`
-	TotalQuantity int       `json:"total_quantity"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	BaseEntity
+	
+	HotelID       string `json:"hotel_id"`
+	Name          string `json:"name"`
+	Code          string `json:"code"`
+	TotalQuantity int    `json:"total_quantity"`
+}
+
+type UpdateRoomTypeRequest struct {
+	Name          string `json:"name"`
+	Code          string `json:"code"`
+	TotalQuantity int    `json:"total_quantity"`
 }
 
 type AvailabilitySearch struct {
@@ -21,6 +24,6 @@ type AvailabilitySearch struct {
 }
 
 type DailyRate struct {
-	Date  string  `json:"date"` // YYYY-MM-DD
+	Date  string  `json:"date"`
 	Price float64 `json:"price"`
 }

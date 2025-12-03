@@ -17,19 +17,36 @@ func NewHotelHandler(uc *usecase.HotelUseCase) *HotelHandler {
 
 func (h *HotelHandler) Create(c echo.Context) error {
 	var req entity.CreateHotelRequest
-	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
-	}
-
-	ownerID, ok := c.Get("user_id").(string)
-	if !ok {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid user context"})
-	}
-
+	if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
+	ownerID := c.Get("user_id").(string)
 	id, err := h.uc.Create(c.Request().Context(), ownerID, req)
+	if err != nil { return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()}) }
+	return c.JSON(http.StatusCreated, map[string]string{"hotel_id": id})
+}
+
+func (h *HotelHandler) Update(c echo.Context) error {
+	id := c.Param("id")
+	var req entity.UpdateHotelRequest
+	if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
+	if err := h.uc.Update(c.Request().Context(), id, req); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "hotel updated"})
+}
+
+func (h *HotelHandler) Delete(c echo.Context) error {
+	id := c.Param("id")
+	if err := h.uc.Delete(c.Request().Context(), id); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "hotel deleted"})
+}
+
+func (h *HotelHandler) ListMine(c echo.Context) error {
+	ownerID := c.Get("user_id").(string)
+	hotels, err := h.uc.ListMine(c.Request().Context(), ownerID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-
-	return c.JSON(http.StatusCreated, map[string]string{"hotel_id": id})
+	return c.JSON(http.StatusOK, map[string]interface{}{"data": hotels})
 }
