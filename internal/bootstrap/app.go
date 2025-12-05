@@ -18,10 +18,11 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	hotelRepo := repository.NewHotelRepository(pool)
 	priceRepo := repository.NewPriceRepository(pool)
 	userRepo := repository.NewUserRepository(pool)
+	guestRepo := repository.NewGuestRepository(pool)
 
 	// 2. UseCases
 	availUC := usecase.NewAvailabilityUseCase(roomRepo)
-	resUC := usecase.NewReservationUseCase(pool, roomRepo, resRepo)
+	resUC := usecase.NewReservationUseCase(pool, roomRepo, resRepo, guestRepo)
 	pricingUC := usecase.NewPricingUseCase(priceRepo, roomRepo)
 	authUC := usecase.NewAuthUseCase(userRepo)
 	hotelUC := usecase.NewHotelUseCase(hotelRepo)

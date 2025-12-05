@@ -16,10 +16,16 @@ func NewRoomHandler(uc *usecase.RoomUseCase) *RoomHandler {
 }
 
 func (h *RoomHandler) Create(c echo.Context) error {
-	var req usecase.CreateRoomTypeRequest
-	if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
+	var req entity.CreateRoomTypeRequest 
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+
 	id, err := h.uc.Create(c.Request().Context(), req)
-	if err != nil { return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()}) }
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
 	return c.JSON(http.StatusCreated, map[string]string{"room_type_id": id})
 }
 

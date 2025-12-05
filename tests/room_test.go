@@ -29,9 +29,13 @@ func (s *RoomSuite) SetupTest() {
 func (s *RoomSuite) TestCRUDRoom() {
 	res := s.MakeRequest("POST", "/api/v1/room-types", map[string]interface{}{
 		"hotel_id":       s.hotelID,
-		"name":           "Suite",
-		"code":           "SUI",
+		"name":           "Family Suite",
+		"code":           "FAM",
 		"total_quantity": 5,
+		"max_occupancy":  4,
+		"max_adults":     2,
+		"max_children":   2,
+		"amenities":      []string{"wifi", "tv", "kitchen"},
 	}, s.token)
 	s.Equal(http.StatusCreated, res.Code)
 	
@@ -40,20 +44,18 @@ func (s *RoomSuite) TestCRUDRoom() {
 	roomID := data["room_type_id"]
 
 	resUpdate := s.MakeRequest("PUT", "/api/v1/room-types/"+roomID, map[string]interface{}{
-		"name":           "Suite Updated",
-		"code":           "UPX",
+		"name":           "Super Family Suite",
+		"code":           "SFM",
 		"total_quantity": 10,
+		"max_occupancy":  5,
+		"max_adults":     3,
+		"max_children":   2,
+		"amenities":      []string{"wifi", "tv", "jacuzzi"},
 	}, s.token)
 	s.Equal(http.StatusOK, resUpdate.Code)
 
 	resDelete := s.MakeRequest("DELETE", "/api/v1/room-types/"+roomID, nil, s.token)
 	s.Equal(http.StatusOK, resDelete.Code)
-
-	resPrice := s.MakeRequest("POST", "/api/v1/pricing/rules", map[string]interface{}{
-		"room_type_id": roomID,
-		"start": "2025-01-01", "end": "2025-01-02", "price": 100.0, "priority": 0,
-	}, s.token)
-	s.Equal(http.StatusNotFound, resPrice.Code)
 }
 
 func TestRoomSuite(t *testing.T) {

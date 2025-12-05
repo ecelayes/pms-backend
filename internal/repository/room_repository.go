@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ecelayes/pms-backend/internal/entity"
 )
@@ -19,21 +20,38 @@ func NewRoomRepository(db *pgxpool.Pool) *RoomRepository {
 
 func (r *RoomRepository) CreateRoomType(ctx context.Context, rt entity.RoomType) (string, error) {
 	query := `
-		INSERT INTO room_types (hotel_id, name, code, total_quantity)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO room_types (hotel_id, name, code, total_quantity, max_occupancy, max_adults, max_children, amenities)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
 	`
 	var id string
-	err := r.db.QueryRow(ctx, query, rt.HotelID, rt.Name, rt.Code, rt.TotalQuantity).Scan(&id)
+	err := r.db.QueryRow(ctx, query, 
+		rt.HotelID, rt.Name, rt.Code, rt.TotalQuantity, 
+		rt.MaxOccupancy, rt.MaxAdults, rt.MaxChildren, rt.Amenities,
+	).Scan(&id)
+	
 	if err != nil {
 		return "", fmt.Errorf("create room type: %w", err)
 	}
 	return id, nil
 }
 
-func (r *RoomRepository) GetAllRoomTypes(ctx context.Context) ([]entity.RoomType, error) {
-	query := `SELECT id, hotel_id, name, code, total_quantity, created_at, updated_at FROM room_types WHERE deleted_at IS NULL`
-	rows, err := r.db.Query(ctx, query)
+func (r *RoomRepository) GetAllRoomTypes(ctx context.Context, hotelID string) ([]entity.RoomType, error) {
+	query := `
+		SELECT id, hotel_id, name, code, total_quantity, max_occupancy, max_adults, max_children, amenities, created_at, updated_at 
+		FROM room_types 
+		WHERE deleted_at IS NULL
+	`
+	var rows pgx.Rows
+	var err error
+
+	if hotelID != "" {
+		query += " AND hotel_id = $1"
+		rows, err = r.db.Query(ctx, query, hotelID)
+	} else {
+		rows, err = r.db.Query(ctx, query)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("query room types: %w", err)
 	}
@@ -42,7 +60,11 @@ func (r *RoomRepository) GetAllRoomTypes(ctx context.Context) ([]entity.RoomType
 	var result []entity.RoomType
 	for rows.Next() {
 		var rt entity.RoomType
-		if err := rows.Scan(&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity, &rt.CreatedAt, &rt.UpdatedAt); err != nil {
+		if err := rows.Scan(
+			&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity, 
+			&rt.MaxOccupancy, &rt.MaxAdults, &rt.MaxChildren, &rt.Amenities,
+			&rt.CreatedAt, &rt.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		result = append(result, rt)
@@ -51,9 +73,17 @@ func (r *RoomRepository) GetAllRoomTypes(ctx context.Context) ([]entity.RoomType
 }
 
 func (r *RoomRepository) GetRoomTypeByID(ctx context.Context, id string) (entity.RoomType, error) {
-	query := `SELECT id, hotel_id, name, code, total_quantity, created_at, updated_at FROM room_types WHERE id = $1 AND deleted_at IS NULL`
+	query := `
+		SELECT id, hotel_id, name, code, total_quantity, max_occupancy, max_adults, max_children, amenities, created_at, updated_at 
+		FROM room_types 
+		WHERE id = $1 AND deleted_at IS NULL
+	`
 	var rt entity.RoomType
-	err := r.db.QueryRow(ctx, query, id).Scan(&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity, &rt.CreatedAt, &rt.UpdatedAt)
+	err := r.db.QueryRow(ctx, query, id).Scan(
+		&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity,
+		&rt.MaxOccupancy, &rt.MaxAdults, &rt.MaxChildren, &rt.Amenities,
+		&rt.CreatedAt, &rt.UpdatedAt,
+	)
 	if err != nil {
 		return entity.RoomType{}, fmt.Errorf("failed to get room type: %w", err)
 	}
@@ -61,8 +91,15 @@ func (r *RoomRepository) GetRoomTypeByID(ctx context.Context, id string) (entity
 }
 
 func (r *RoomRepository) Update(ctx context.Context, id string, req entity.UpdateRoomTypeRequest) error {
-	query := `UPDATE room_types SET name = $2, code = $3, total_quantity = $4 WHERE id = $1 AND deleted_at IS NULL`
-	cmd, err := r.db.Exec(ctx, query, id, req.Name, req.Code, req.TotalQuantity)
+	query := `
+		UPDATE room_types 
+		SET name = $2, code = $3, total_quantity = $4, max_occupancy = $5, max_adults = $6, max_children = $7, amenities = $8
+		WHERE id = $1 AND deleted_at IS NULL
+	`
+	cmd, err := r.db.Exec(ctx, query, 
+		id, req.Name, req.Code, req.TotalQuantity, 
+		req.MaxOccupancy, req.MaxAdults, req.MaxChildren, req.Amenities,
+	)
 	if err != nil {
 		return fmt.Errorf("update room type: %w", err)
 	}
@@ -128,7 +165,7 @@ func (r *RoomRepository) GetDailyPrices(ctx context.Context, roomTypeID string, 
 			SELECT bd.day, pr.price, ROW_NUMBER() OVER (PARTITION BY bd.day ORDER BY pr.priority DESC) as rn
 			FROM booking_days bd
 			JOIN price_rules pr ON pr.room_type_id = $1 AND pr.validity_range @> bd.day
-			WHERE pr.deleted_at IS NULL -- Filtro Soft Delete
+			WHERE pr.deleted_at IS NULL
 		)
 		SELECT day::text, price FROM ranked_prices WHERE rn = 1 ORDER BY day;
 	`

@@ -26,3 +26,6 @@ INSERT INTO price_rules (room_type_id, validity_range, price, priority)
 VALUES 
     ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', '[2024-01-01, 2025-12-31)', 500.00, 0),
     ('b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22', '[2024-01-01, 2025-12-31)', 200.00, 0);
+
+INSERT INTO guests (id, email, first_name, last_name) 
+VALUES ('g0eebc99-9c0b-4ef8-bb6d-6bb9bd380a55', 'vip@guest.com', 'Lionel', 'Messi');

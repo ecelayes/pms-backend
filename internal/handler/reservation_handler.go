@@ -23,6 +23,13 @@ func (h *ReservationHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
 
+	if req.RoomTypeID == "" || req.GuestEmail == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing room_type_id or guest_email"})
+	}
+	if req.GuestFirstName == "" || req.GuestLastName == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "guest name is required"})
+	}
+
 	code, err := h.uc.Create(c.Request().Context(), req)
 	if err != nil {
 		switch {

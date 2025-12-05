@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"time"
@@ -16,13 +17,15 @@ type ReservationUseCase struct {
 	db       *pgxpool.Pool
 	roomRepo *repository.RoomRepository
 	resRepo  *repository.ReservationRepository
+	guestRepo *repository.GuestRepository
 }
 
-func NewReservationUseCase(db *pgxpool.Pool, roomRepo *repository.RoomRepository, resRepo *repository.ReservationRepository) *ReservationUseCase {
+func NewReservationUseCase(db *pgxpool.Pool, roomRepo *repository.RoomRepository, resRepo *repository.ReservationRepository, guestRepo *repository.GuestRepository) *ReservationUseCase {
 	return &ReservationUseCase{
-		db:       db,
-		roomRepo: roomRepo,
-		resRepo:  resRepo,
+		db:        db,
+		roomRepo:  roomRepo,
+		resRepo:   resRepo,
+		guestRepo: guestRepo,
 	}
 }
 
@@ -50,6 +53,28 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 		return "", entity.ErrInvalidDateRange
 	}
 
+	if req.Adults <= 0 {
+		return "", errors.New("at least 1 adult is required")
+	}
+	if req.Children < 0 {
+		return "", errors.New("children cannot be negative")
+	}
+
+	roomType, err := uc.roomRepo.GetRoomTypeByID(ctx, req.RoomTypeID)
+	if err != nil {
+		return "", entity.ErrRoomTypeNotFound
+	}
+
+	if req.Adults > roomType.MaxAdults {
+		return "", errors.New("exceeds max adults for this room")
+	}
+	if req.Children > roomType.MaxChildren {
+		return "", errors.New("exceeds max children for this room")
+	}
+	if (req.Adults + req.Children) > roomType.MaxOccupancy {
+		return "", errors.New("exceeds max total occupancy for this room")
+	}
+
 	hotelCode, roomCode, err := uc.roomRepo.GetCodesForGeneration(ctx, req.RoomTypeID)
 	if err != nil {
 		return "", entity.ErrRoomTypeNotFound
@@ -61,7 +86,8 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 		return "", err
 	}
 
-	if len(dailyRates) != int(end.Sub(start).Hours()/24) {
+	expectedNights := int(end.Sub(start).Hours() / 24)
+	if len(dailyRates) != expectedNights {
 		return "", entity.ErrNoAvailability
 	}
 
@@ -76,14 +102,65 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 	}
 	defer tx.Rollback(ctx)
 
-	reservedCount, err := uc.roomRepo.CountReservations(ctx, tx, req.RoomTypeID, start, end)
+	if req.GuestEmail == "" {
+		return "", errors.New("guest email is required")
+	}
+
+	guest, err := uc.guestRepo.GetByEmail(ctx, req.GuestEmail)
 	if err != nil {
 		return "", err
 	}
 
-	roomType, err := uc.roomRepo.GetRoomTypeByID(ctx, req.RoomTypeID)
+	var guestID string
+
+	if guest != nil {
+		guestID = guest.ID
+
+		needsUpdate := false
+		
+		if req.GuestFirstName != "" && req.GuestFirstName != guest.FirstName {
+			needsUpdate = true
+		}
+		if req.GuestLastName != "" && req.GuestLastName != guest.LastName {
+			needsUpdate = true
+		}
+		if req.GuestPhone != "" && req.GuestPhone != guest.Phone {
+			needsUpdate = true
+		}
+
+		if needsUpdate {
+			updatedGuest := entity.Guest{
+				Email:     guest.Email,
+				FirstName: req.GuestFirstName,
+				LastName:  req.GuestLastName,
+				Phone:     req.GuestPhone,
+			}
+			if err := uc.guestRepo.Update(ctx, tx, updatedGuest); err != nil {
+				return "", err
+			}
+		}
+
+	} else {
+		if req.GuestFirstName == "" || req.GuestLastName == "" {
+			return "", errors.New("guest name is required for new registration")
+		}
+		
+		newGuest := entity.Guest{
+			Email:     req.GuestEmail,
+			FirstName: req.GuestFirstName,
+			LastName:  req.GuestLastName,
+			Phone:     req.GuestPhone,
+		}
+		
+		guestID, err = uc.guestRepo.Create(ctx, tx, newGuest)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	reservedCount, err := uc.roomRepo.CountReservations(ctx, tx, req.RoomTypeID, start, end)
 	if err != nil {
-		return "", entity.ErrRoomTypeNotFound
+		return "", err
 	}
 
 	if (roomType.TotalQuantity - reservedCount) <= 0 {
@@ -91,18 +168,20 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 	}
 
 	newID := uuid.New().String()
-	
 	res := entity.Reservation{
 		BaseEntity: entity.BaseEntity{
 			ID: newID,
 		},
 		ReservationCode: resCode,
 		RoomTypeID:      req.RoomTypeID,
-		GuestEmail:      req.GuestEmail,
+		GuestID:         guestID,
 		Start:           start,
 		End:             end,
 		TotalPrice:      totalPrice,
 		Status:          "confirmed",
+		
+		Adults:   req.Adults,
+		Children: req.Children,
 	}
 
 	if err := uc.resRepo.Create(ctx, tx, res); err != nil {

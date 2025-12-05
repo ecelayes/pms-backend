@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ecelayes/pms-backend/internal/entity"
@@ -18,10 +19,16 @@ func NewReservationRepository(db *pgxpool.Pool) *ReservationRepository {
 
 func (r *ReservationRepository) Create(ctx context.Context, tx pgx.Tx, res entity.Reservation) error {
 	query := `
-		INSERT INTO reservations (id, room_type_id, reservation_code, stay_range, guest_email, total_price, status)
-		VALUES ($1, $2, $3, daterange($4::date, $5::date), $6, $7, 'confirmed')
+		INSERT INTO reservations (
+			id, room_type_id, reservation_code, stay_range, guest_id, 
+			total_price, status, adults, children
+		)
+		VALUES ($1, $2, $3, daterange($4::date, $5::date), $6, $7, 'confirmed', $8, $9)
 	`
-	_, err := tx.Exec(ctx, query, res.ID, res.RoomTypeID, res.ReservationCode, res.Start, res.End, res.GuestEmail, res.TotalPrice)
+	_, err := tx.Exec(ctx, query, 
+		res.ID, res.RoomTypeID, res.ReservationCode, res.Start, res.End, res.GuestID, 
+		res.TotalPrice, res.Adults, res.Children,
+	)
 	if err != nil {
 		return fmt.Errorf("insert reservation: %w", err)
 	}
@@ -42,14 +49,16 @@ func (r *ReservationRepository) UpdateStatus(ctx context.Context, id string, sta
 
 func (r *ReservationRepository) GetByCode(ctx context.Context, code string) (*entity.Reservation, error) {
 	query := `
-		SELECT id, reservation_code, room_type_id, guest_email, lower(stay_range), upper(stay_range), total_price, status, created_at, updated_at
+		SELECT id, reservation_code, room_type_id, guest_id, lower(stay_range), upper(stay_range), 
+		       total_price, status, adults, children, created_at, updated_at
 		FROM reservations
 		WHERE reservation_code = $1 AND deleted_at IS NULL
 	`
 	var res entity.Reservation
 	err := r.db.QueryRow(ctx, query, code).Scan(
-		&res.ID, &res.ReservationCode, &res.RoomTypeID, &res.GuestEmail, 
+		&res.ID, &res.ReservationCode, &res.RoomTypeID, &res.GuestID, 
 		&res.Start, &res.End, &res.TotalPrice, &res.Status, 
+		&res.Adults, &res.Children,
 		&res.CreatedAt, &res.UpdatedAt,
 	)
 	if err != nil {

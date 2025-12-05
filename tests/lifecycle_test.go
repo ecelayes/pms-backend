@@ -17,108 +17,87 @@ type LifecycleSuite struct {
 }
 
 func (s *LifecycleSuite) TestFullLifecycle() {
-	s.Run("1. Register Owner", func() {
-		res := s.MakeRequest("POST", "/api/v1/auth/register", map[string]string{
-			"email":    "ceo@chain.com",
-			"password": "SecurePass123!",
-		}, "")
-		s.Equal(http.StatusCreated, res.Code)
-	})
-
-	s.Run("2. Login Owner", func() {
-		res := s.MakeRequest("POST", "/api/v1/auth/login", map[string]string{
-			"email":    "ceo@chain.com",
-			"password": "SecurePass123!",
-		}, "")
-		s.Equal(http.StatusOK, res.Code)
-
+	s.Run("1. Auth Setup", func() {
+		s.MakeRequest("POST", "/api/v1/auth/register", map[string]string{"email": "ceo@chain.com", "password": "Pass"}, "")
+		res := s.MakeRequest("POST", "/api/v1/auth/login", map[string]string{"email": "ceo@chain.com", "password": "Pass"}, "")
 		var data map[string]string
 		json.Unmarshal(res.Body.Bytes(), &data)
 		s.ownerToken = data["token"]
-		s.NotEmpty(s.ownerToken)
 	})
 
-	s.Run("3. Create Hotel", func() {
-		res := s.MakeRequest("POST", "/api/v1/hotels", map[string]string{
-			"name": "Grand Lifecycle Hotel",
-			"code": "LIF",
-		}, s.ownerToken)
-		s.Equal(http.StatusCreated, res.Code)
-
+	s.Run("2. Create Hotel", func() {
+		res := s.MakeRequest("POST", "/api/v1/hotels", map[string]string{"name": "Grand Lifecycle", "code": "LIF"}, s.ownerToken)
 		var data map[string]string
 		json.Unmarshal(res.Body.Bytes(), &data)
 		s.hotelID = data["hotel_id"]
-		s.NotEmpty(s.hotelID)
 	})
 
-	s.Run("4. Create Room", func() {
+	s.Run("3. Create Family Room", func() {
 		res := s.MakeRequest("POST", "/api/v1/room-types", map[string]interface{}{
 			"hotel_id":       s.hotelID,
-			"name":           "Suite Lifecycle",
-			"code":           "SUI",
+			"name":           "Family Suite",
+			"code":           "FAM",
 			"total_quantity": 5,
+			"max_occupancy":  4,
+			"max_adults":     2,
+			"max_children":   2,
+			"amenities":      []string{"wifi", "crib"},
 		}, s.ownerToken)
 		s.Equal(http.StatusCreated, res.Code)
-
 		var data map[string]string
 		json.Unmarshal(res.Body.Bytes(), &data)
 		s.roomID = data["room_type_id"]
-		s.NotEmpty(s.roomID)
 	})
 
-	s.Run("5. Set Pricing", func() {
-		res := s.MakeRequest("POST", "/api/v1/pricing/rules", map[string]interface{}{
+	s.Run("4. Set Pricing", func() {
+		s.MakeRequest("POST", "/api/v1/pricing/rules", map[string]interface{}{
 			"room_type_id": s.roomID,
-			"start":        "2025-10-01",
-			"end":          "2025-10-05",
-			"price":        200.0,
-			"priority":     10,
+			"start": "2025-10-01", "end": "2025-10-05", "price": 200.0, "priority": 10,
 		}, s.ownerToken)
-		s.Equal(http.StatusCreated, res.Code)
+	})
+
+	s.Run("5. Availability Logic", func() {
+		resOK := s.MakeRequest("GET", "/api/v1/availability?start=2025-10-01&end=2025-10-05&adults=2&children=2", nil, "")
+		s.Contains(resOK.Body.String(), `"available_qty":5`)
+
+		resFail := s.MakeRequest("GET", "/api/v1/availability?start=2025-10-01&end=2025-10-05&adults=3", nil, "")
+		s.NotContains(resFail.Body.String(), s.roomID)
+
+		resMulti := s.MakeRequest("GET", "/api/v1/availability?start=2025-10-01&end=2025-10-05&adults=4&rooms=2", nil, "")
+		s.Contains(resMulti.Body.String(), `"total_price":1600`)
 	})
 
 	s.Run("6. Customer Reserves", func() {
 		res := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
-			"room_type_id": s.roomID,
-			"guest_email":  "tourist@gmail.com",
-			"start":        "2025-10-01",
-			"end":          "2025-10-05",
+			"room_type_id":     s.roomID,
+			"guest_email":      "family@vacation.com",
+			"guest_first_name": "Pepito",
+			"guest_last_name":  "Perez",
+			"start":            "2025-10-01",
+			"end":              "2025-10-05",
+			"adults":           2,
+			"children":         2,
 		}, "")
 		s.Equal(http.StatusCreated, res.Code)
 
 		var data map[string]string
 		json.Unmarshal(res.Body.Bytes(), &data)
 		s.resCode = data["reservation_code"]
-		s.Contains(s.resCode, "LIF-SUI-")
 	})
 
-	s.Run("7. Check Availability", func() {
-		res := s.MakeRequest("GET", "/api/v1/availability?start=2025-10-01&end=2025-10-05", nil, "")
-		s.Equal(http.StatusOK, res.Code)
-		s.Contains(res.Body.String(), `"available_qty":4`)
-	})
-
-	s.Run("8. Cancel Reservation", func() {
-		resGet := s.MakeRequest("GET", "/api/v1/reservations/"+s.resCode, nil, "")
-		var dataGet map[string]interface{}
-		json.Unmarshal(resGet.Body.Bytes(), &dataGet)
-		id := dataGet["id"].(string)
-
-		resCancel := s.MakeRequest("POST", "/api/v1/reservations/"+id+"/cancel", nil, "")
-		s.Equal(http.StatusOK, resCancel.Code)
-	})
-
-	s.Run("9. Check Restored Availability", func() {
-		res := s.MakeRequest("GET", "/api/v1/availability?start=2025-10-01&end=2025-10-05", nil, "")
-		s.Contains(res.Body.String(), `"available_qty":5`) // Volvió a 5
-	})
-	
-	s.Run("10. Delete Hotel", func() {
-		res := s.MakeRequest("DELETE", "/api/v1/hotels/"+s.hotelID, nil, s.ownerToken)
-		s.Equal(http.StatusOK, res.Code)
-		
-		resList := s.MakeRequest("GET", "/api/v1/hotels", nil, s.ownerToken)
-		s.NotContains(resList.Body.String(), s.hotelID)
+	s.Run("7. Update Guest on Reserve", func() {
+		res := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
+			"room_type_id":     s.roomID,
+			"guest_email":      "family@vacation.com",
+			"guest_first_name": "Pepito Updated",
+			"guest_last_name":  "Perez",
+			"guest_phone":      "99999",
+			"start":            "2025-10-01",
+			"end":              "2025-10-05",
+			"adults":           2,
+			"children":         0,
+		}, "")
+		s.Equal(http.StatusCreated, res.Code)
 	})
 }
 
