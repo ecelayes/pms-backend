@@ -5,10 +5,8 @@ ifneq (,$(wildcard ./.env))
 endif
 
 APP_NAME=pms-backend
-
-DB_DSN := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable
-TEST_DB_DSN := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_TEST_NAME)?sslmode=disable
-DB_ADMIN_DSN := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/postgres?sslmode=disable
+TARGET_DB ?= $(DB_NAME)
+GO_TEST_DSN := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_TEST_NAME)?sslmode=disable
 
 .PHONY: help run build test clean db-up db-seed db-reset test-prepare test-all test-unit docker-up docker-down docker-db-reset \
         test-lifecycle test-hotel test-auth test-room test-pricing test-reservation
@@ -31,16 +29,16 @@ clean:
 
 # --- DATABASE ---
 db-up:
-	@echo "Applying schema to $(DB_NAME)"
-	@cat migrations/*.up.sql | psql "$(DB_DSN)"
+	@echo "Applying schema to $(TARGET_DB)"
+	@cat migrations/*.up.sql | sudo docker compose exec -T db psql -U $(DB_USER) -d $(TARGET_DB)
 
 db-seed:
-	@echo "Seeding data"
-	@cat scripts/seed_data.sql | psql "$(DB_DSN)"
+	@echo "Seeding data to $(TARGET_DB)"
+	@cat scripts/seed_data.sql | sudo docker compose exec -T db psql -U $(DB_USER) -d $(TARGET_DB)
 
 db-reset:
 	@echo "Resetting Database $(DB_NAME)"
-	psql "$(DB_DSN)" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+	sudo docker compose exec -T db psql -U $(DB_USER) -d $(DB_NAME) -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 	@make db-up
 	@make db-seed
 	@echo "Database Ready!"
@@ -48,54 +46,54 @@ db-reset:
 # --- TESTING ---
 test-prepare:
 	@echo "Preparing Test Database: $(DB_TEST_NAME)"
-	@psql "$(DB_ADMIN_DSN)" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$(DB_TEST_NAME)' AND pid <> pg_backend_pid();" || true
-	@psql "$(DB_ADMIN_DSN)" -c "DROP DATABASE IF EXISTS $(DB_TEST_NAME);"
-	@psql "$(DB_ADMIN_DSN)" -c "CREATE DATABASE $(DB_TEST_NAME);"
-	@make db-up DB_DSN="$(TEST_DB_DSN)"
+	@sudo docker compose exec -T db psql -U $(DB_USER) -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$(DB_TEST_NAME)' AND pid <> pg_backend_pid();" || true
+	@sudo docker compose exec -T db psql -U $(DB_USER) -d postgres -c "DROP DATABASE IF EXISTS $(DB_TEST_NAME);"
+	@sudo docker compose exec -T db psql -U $(DB_USER) -d postgres -c "CREATE DATABASE $(DB_TEST_NAME);"
+	@make db-up TARGET_DB=$(DB_TEST_NAME)
 
 test-all: test-prepare
 	@echo "Running ALL Tests"
-	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -skip TestLifecycleSuite
-	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -run TestLifecycleSuite
+	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -skip TestLifecycleSuite
+	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestLifecycleSuite
 
 test-unit: test-prepare
 	@echo "Running Unit Tests"
-	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -skip TestLifecycleSuite
+	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -skip TestLifecycleSuite
 
 test-lifecycle: test-prepare
 	@echo "Running Lifecycle Test"
-	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -run TestLifecycleSuite
+	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestLifecycleSuite
 
 test-auth: test-prepare
 	@echo "Running Auth Tests"
-	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -run TestAuthSuite
+	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestAuthSuite
 
 test-hotel: test-prepare
 	@echo "Running Hotel Tests"
-	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -run TestHotelSuite
+	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestHotelSuite
 
 test-room: test-prepare
 	@echo "Running Room Tests"
-	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -run TestRoomSuite
+	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestRoomSuite
 
 test-pricing: test-prepare
 	@echo "Running Pricing Tests"
-	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -run TestPricingSuite
+	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestPricingSuite
 
 test-reservation: test-prepare
 	@echo "Running Reservation Tests"
-	export TEST_DATABASE_URL="$(TEST_DB_DSN)"; go test -v ./tests/... -run TestReservationSuite
+	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestReservationSuite
 
 # --- DOCKER ---
 docker-up:
-	docker-compose up -d --build
+	sudo docker compose up -d --build
 
 docker-down:
-	docker-compose down
+	sudo docker compose down -v
 
 docker-db-reset:
 	@echo "Resetting Docker DB"
 	@sleep 2
-	docker exec -i pms-db psql -U $(DB_USER) -d $(DB_NAME) -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-	cat migrations/*.up.sql | docker exec -i pms-db psql -U $(DB_USER) -d $(DB_NAME)
-	cat scripts/seed_data.sql | docker exec -i pms-db psql -U $(DB_USER) -d $(DB_NAME)
+	sudo docker compose exec -T db psql -U $(DB_USER) -d $(DB_NAME) -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+	cat migrations/*.up.sql | sudo docker compose exec -T db psql -U $(DB_USER) -d $(DB_NAME)
+	cat scripts/seed_data.sql | sudo docker compose exec -T db psql -U $(DB_USER) -d $(DB_NAME)

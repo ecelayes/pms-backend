@@ -2,7 +2,9 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/ecelayes/pms-backend/internal/entity"
 	"github.com/ecelayes/pms-backend/internal/repository"
 	"github.com/ecelayes/pms-backend/pkg/auth"
@@ -27,7 +29,12 @@ func (uc *AuthUseCase) Register(ctx context.Context, req entity.AuthRequest) err
 		return err
 	}
 
-	return uc.repo.Create(ctx, req.Email, passwordHash, userSalt, "admin")
+	userID, err := uuid.NewV7()
+	if err != nil {
+		return fmt.Errorf("failed to generate uuid v7: %w", err)
+	}
+
+	return uc.repo.Create(ctx, userID.String(), req.Email, passwordHash, userSalt, "admin")
 }
 
 func (uc *AuthUseCase) Login(ctx context.Context, req entity.AuthRequest) (string, error) {

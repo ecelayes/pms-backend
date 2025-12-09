@@ -2,7 +2,10 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 	"time"
+
+	"github.com/google/uuid"
 	"github.com/ecelayes/pms-backend/internal/entity"
 	"github.com/ecelayes/pms-backend/internal/repository"
 )
@@ -17,10 +20,11 @@ func NewPricingUseCase(priceRepo *repository.PriceRepository, roomRepo *reposito
 }
 
 func (uc *PricingUseCase) CreateRule(ctx context.Context, req entity.CreatePriceRuleRequest) error {
+	layout := "2006-01-02"
+
 	if req.Price <= 0 { return entity.ErrPriceNegative }
 	if req.Priority < 0 { return entity.ErrPriorityNegative }
-	
-	layout := "2006-01-02"
+
 	start, err := time.Parse(layout, req.Start)
 	if err != nil { return entity.ErrInvalidDateFormat }
 	end, err := time.Parse(layout, req.End)
@@ -30,7 +34,15 @@ func (uc *PricingUseCase) CreateRule(ctx context.Context, req entity.CreatePrice
 	_, err = uc.roomRepo.GetRoomTypeByID(ctx, req.RoomTypeID)
 	if err != nil { return entity.ErrRoomTypeNotFound }
 
+	newID, err := uuid.NewV7()
+	if err != nil {
+		return fmt.Errorf("failed to generate uuid v7: %w", err)
+	}
+
 	rule := entity.PriceRule{
+		BaseEntity: entity.BaseEntity{
+			ID: newID.String(),
+		},
 		RoomTypeID: req.RoomTypeID,
 		Start:      start,
 		End:        end,

@@ -3,7 +3,10 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+
+	"github.com/google/uuid"
 	"github.com/ecelayes/pms-backend/internal/entity"
 	"github.com/ecelayes/pms-backend/internal/repository"
 )
@@ -23,8 +26,22 @@ func (uc *HotelUseCase) Create(ctx context.Context, ownerID string, req entity.C
 	if len(req.Code) < 3 || len(req.Code) > 5 {
 		return "", errors.New("code must be between 3 and 5 characters")
 	}
-	req.Code = strings.ToUpper(req.Code)
-	return uc.repo.Create(ctx, ownerID, req)
+	
+	hotelID, err := uuid.NewV7()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate uuid v7: %w", err)
+	}
+
+	hotel := entity.Hotel{
+		BaseEntity: entity.BaseEntity{
+			ID: hotelID.String(),
+		},
+		OwnerID: ownerID,
+		Name:    req.Name,
+		Code:    strings.ToUpper(req.Code),
+	}
+
+	return uc.repo.Create(ctx, hotel)
 }
 
 func (uc *HotelUseCase) Update(ctx context.Context, id string, req entity.UpdateHotelRequest) error {

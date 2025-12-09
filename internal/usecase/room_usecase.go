@@ -3,8 +3,10 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/ecelayes/pms-backend/internal/entity"
 	"github.com/ecelayes/pms-backend/internal/repository"
 )
@@ -34,7 +36,15 @@ func (uc *RoomUseCase) Create(ctx context.Context, req entity.CreateRoomTypeRequ
 		return "", errors.New("max adults must be at least 1")
 	}
 
+	newID, err := uuid.NewV7()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate uuid v7: %w", err)
+	}
+
 	rt := entity.RoomType{
+		BaseEntity: entity.BaseEntity{
+			ID: newID.String(),
+		},
 		HotelID:       req.HotelID,
 		Name:          req.Name,
 		Code:          strings.ToUpper(req.Code),

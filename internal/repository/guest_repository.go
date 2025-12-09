@@ -19,17 +19,17 @@ func NewGuestRepository(db *pgxpool.Pool) *GuestRepository {
 
 func (r *GuestRepository) Create(ctx context.Context, tx pgx.Tx, g entity.Guest) (string, error) {
 	query := `
-		INSERT INTO guests (email, first_name, last_name, phone)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO guests (id, email, first_name, last_name, phone, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
 		RETURNING id
 	`
 	var id string
 	var err error
 	
 	if tx != nil {
-		err = tx.QueryRow(ctx, query, g.Email, g.FirstName, g.LastName, g.Phone).Scan(&id)
+		err = tx.QueryRow(ctx, query, g.ID, g.Email, g.FirstName, g.LastName, g.Phone).Scan(&id)
 	} else {
-		err = r.db.QueryRow(ctx, query, g.Email, g.FirstName, g.LastName, g.Phone).Scan(&id)
+		err = r.db.QueryRow(ctx, query, g.ID, g.Email, g.FirstName, g.LastName, g.Phone).Scan(&id)
 	}
 
 	if err != nil {

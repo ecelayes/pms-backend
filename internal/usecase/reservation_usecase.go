@@ -144,8 +144,16 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 		if req.GuestFirstName == "" || req.GuestLastName == "" {
 			return "", errors.New("guest name is required for new registration")
 		}
+
+		newID, err := uuid.NewV7()
+		if err != nil {
+			return "", fmt.Errorf("failed to generate uuid v7: %w", err)
+		}
 		
 		newGuest := entity.Guest{
+			BaseEntity: entity.BaseEntity{
+				ID: newID.String(),
+			},
 			Email:     req.GuestEmail,
 			FirstName: req.GuestFirstName,
 			LastName:  req.GuestLastName,
@@ -167,10 +175,14 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 		return "", entity.ErrNoAvailability
 	}
 
-	newID := uuid.New().String()
+	newID, err := uuid.NewV7()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate uuid v7: %w", err)
+	}
+
 	res := entity.Reservation{
 		BaseEntity: entity.BaseEntity{
-			ID: newID,
+			ID: newID.String(),
 		},
 		ReservationCode: resCode,
 		RoomTypeID:      req.RoomTypeID,

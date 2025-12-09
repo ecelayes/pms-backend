@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,9 +19,12 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-func (r *UserRepository) Create(ctx context.Context, email, password, salt, role string) error {
-	query := `INSERT INTO users (email, password, salt, role) VALUES ($1, $2, $3, $4)`
-	_, err := r.db.Exec(ctx, query, email, password, salt, role)
+func (r *UserRepository) Create(ctx context.Context, id, email, password, salt, role string) error {
+	query := `
+		INSERT INTO users (id, email, password, salt, role, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+	`
+	_, err := r.db.Exec(ctx, query, id, email, password, salt, role)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
