@@ -29,6 +29,14 @@ func (h *OrganizationHandler) Create(c echo.Context) error {
 	return c.JSON(http.StatusCreated, map[string]string{"organization_id": id})
 }
 
+func (h *OrganizationHandler) GetAll(c echo.Context) error {
+	orgs, err := h.uc.GetAll(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusOK, orgs)
+}
+
 func (h *OrganizationHandler) GetByID(c echo.Context) error {
 	id := c.Param("id")
 	org, err := h.uc.GetByID(c.Request().Context(), id)

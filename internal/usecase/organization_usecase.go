@@ -49,6 +49,10 @@ func (uc *OrganizationUseCase) Create(ctx context.Context, req entity.CreateOrga
 	return orgID.String(), nil
 }
 
+func (uc *OrganizationUseCase) GetAll(ctx context.Context) ([]entity.Organization, error) {
+	return uc.repo.GetAll(ctx)
+}
+
 func (uc *OrganizationUseCase) GetByID(ctx context.Context, id string) (*entity.Organization, error) {
 	return uc.repo.GetByID(ctx, id)
 }

@@ -36,46 +36,66 @@ func (r *RoomRepository) CreateRoomType(ctx context.Context, rt entity.RoomType)
 	return id, nil
 }
 
-func (r *RoomRepository) GetAllRoomTypes(ctx context.Context, hotelID string) ([]entity.RoomType, error) {
+func (r *RoomRepository) GetAll(ctx context.Context) ([]entity.RoomType, error) {
 	query := `
-		SELECT id, hotel_id, name, code, total_quantity, max_occupancy, max_adults, max_children, amenities, created_at, updated_at 
-		FROM room_types 
+		SELECT id, hotel_id, name, code, total_quantity, max_occupancy, max_adults, max_children, amenities, created_at, updated_at
+		FROM room_types
 		WHERE deleted_at IS NULL
 	`
-	var rows pgx.Rows
-	var err error
-
-	if hotelID != "" {
-		query += " AND hotel_id = $1"
-		rows, err = r.db.Query(ctx, query, hotelID)
-	} else {
-		rows, err = r.db.Query(ctx, query)
-	}
-
+	rows, err := r.db.Query(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("query room types: %w", err)
+		return nil, fmt.Errorf("get all room types: %w", err)
 	}
 	defer rows.Close()
 
-	var result []entity.RoomType
+	var rooms []entity.RoomType
 	for rows.Next() {
 		var rt entity.RoomType
-		if err := rows.Scan(
-			&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity, 
+		err := rows.Scan(
+			&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity,
 			&rt.MaxOccupancy, &rt.MaxAdults, &rt.MaxChildren, &rt.Amenities,
 			&rt.CreatedAt, &rt.UpdatedAt,
-		); err != nil {
+		)
+		if err != nil {
 			return nil, err
 		}
-		result = append(result, rt)
+		rooms = append(rooms, rt)
 	}
-	return result, nil
+	return rooms, nil
 }
 
-func (r *RoomRepository) GetRoomTypeByID(ctx context.Context, id string) (entity.RoomType, error) {
+func (r *RoomRepository) ListByHotel(ctx context.Context, hotelID string) ([]entity.RoomType, error) {
 	query := `
-		SELECT id, hotel_id, name, code, total_quantity, max_occupancy, max_adults, max_children, amenities, created_at, updated_at 
-		FROM room_types 
+		SELECT id, hotel_id, name, code, total_quantity, max_occupancy, max_adults, max_children, amenities, created_at, updated_at
+		FROM room_types
+		WHERE hotel_id = $1 AND deleted_at IS NULL
+	`
+	rows, err := r.db.Query(ctx, query, hotelID)
+	if err != nil {
+		return nil, fmt.Errorf("list room types: %w", err)
+	}
+	defer rows.Close()
+
+	var rooms []entity.RoomType
+	for rows.Next() {
+		var rt entity.RoomType
+		err := rows.Scan(
+			&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity,
+			&rt.MaxOccupancy, &rt.MaxAdults, &rt.MaxChildren, &rt.Amenities,
+			&rt.CreatedAt, &rt.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		rooms = append(rooms, rt)
+	}
+	return rooms, nil
+}
+
+func (r *RoomRepository) GetByID(ctx context.Context, id string) (*entity.RoomType, error) {
+	query := `
+		SELECT id, hotel_id, name, code, total_quantity, max_occupancy, max_adults, max_children, amenities, created_at, updated_at
+		FROM room_types
 		WHERE id = $1 AND deleted_at IS NULL
 	`
 	var rt entity.RoomType
@@ -85,9 +105,12 @@ func (r *RoomRepository) GetRoomTypeByID(ctx context.Context, id string) (entity
 		&rt.CreatedAt, &rt.UpdatedAt,
 	)
 	if err != nil {
-		return entity.RoomType{}, fmt.Errorf("failed to get room type: %w", err)
+		if err == pgx.ErrNoRows {
+			return nil, entity.ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("get room type: %w", err)
 	}
-	return rt, nil
+	return &rt, nil
 }
 
 func (r *RoomRepository) Update(ctx context.Context, id string, req entity.UpdateRoomTypeRequest) error {

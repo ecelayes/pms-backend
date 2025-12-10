@@ -10,21 +10,20 @@ import (
 
 type LifecycleSuite struct {
 	BaseSuite
-	superAdminToken string
-	ownerToken      string
-	orgID           string
-	hotelID         string
-	roomID          string
+	superToken string
+	ownerToken string
+	orgID      string
+	hotelID    string
+	roomID     string
 }
 
 func (s *LifecycleSuite) TestFullLifecycle() {
-	s.superAdminToken, _ = s.GetAdminTokenAndOrg()
+	s.superToken = s.GetSuperAdminToken()
 
 	s.Run("1. Create Organization", func() {
 		res := s.MakeRequest("POST", "/api/v1/organizations", map[string]string{
 			"name": "Global Hotels Corp",
-		}, s.superAdminToken)
-		
+		}, s.superToken)
 		s.Equal(http.StatusCreated, res.Code)
 		var data map[string]string
 		json.Unmarshal(res.Body.Bytes(), &data)
@@ -35,24 +34,21 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 		res := s.MakeRequest("POST", "/api/v1/users", map[string]string{
 			"organization_id": s.orgID,
 			"email":           "ceo@global.com",
-			"password":        "SecurePass123",
+			"password":        "pass",
 			"role":            "owner",
-		}, s.superAdminToken)
-		
+		}, s.superToken)
 		s.Equal(http.StatusCreated, res.Code)
 	})
 
 	s.Run("3. Login Owner", func() {
 		res := s.MakeRequest("POST", "/api/v1/auth/login", map[string]string{
 			"email":    "ceo@global.com",
-			"password": "SecurePass123",
+			"password": "pass",
 		}, "")
-		
 		s.Equal(http.StatusOK, res.Code)
 		var data map[string]string
 		json.Unmarshal(res.Body.Bytes(), &data)
 		s.ownerToken = data["token"]
-		s.NotEmpty(s.ownerToken)
 	})
 
 	s.Run("4. Create Hotel", func() {

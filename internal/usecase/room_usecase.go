@@ -59,6 +59,17 @@ func (uc *RoomUseCase) Create(ctx context.Context, req entity.CreateRoomTypeRequ
 	return uc.repo.CreateRoomType(ctx, rt)
 }
 
+func (uc *RoomUseCase) ListByHotel(ctx context.Context, hotelID string) ([]entity.RoomType, error) {
+	if hotelID == "" {
+		return nil, errors.New("hotel_id is required")
+	}
+	return uc.repo.ListByHotel(ctx, hotelID)
+}
+
+func (uc *RoomUseCase) GetByID(ctx context.Context, id string) (*entity.RoomType, error) {
+	return uc.repo.GetByID(ctx, id)
+}
+
 func (uc *RoomUseCase) Update(ctx context.Context, id string, req entity.UpdateRoomTypeRequest) error {
 	if req.TotalQuantity < 0 {
 		return errors.New("total quantity cannot be negative")

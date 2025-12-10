@@ -35,7 +35,7 @@ func (s *BaseSuite) SetupSuite() {
 func (s *BaseSuite) TearDownSuite() { s.db.Close() }
 
 func (s *BaseSuite) SetupTest() {
-	tables := []string{"reservations", "price_rules", "room_types", "hotels", "organization_members", "users", "organizations", "guests"}
+	tables := []string{"reservations", "price_rules", "room_types", "hotels", "hotel_services", "amenities", "organization_members", "users", "organizations", "guests"}
 	for _, table := range tables {
 		s.db.Exec(context.Background(), fmt.Sprintf("TRUNCATE TABLE %s CASCADE", table))
 	}
@@ -61,39 +61,36 @@ func (s *BaseSuite) MakeRequest(method, url string, body interface{}, token stri
 
 func (s *BaseSuite) GetAdminTokenAndOrg() (string, string) {
 	ctx := context.Background()
-	
 	orgID, _ := uuid.NewV7()
 	userID, _ := uuid.NewV7()
-	memberID, _ := uuid.NewV7()
-	
-	email := "admin@test.com"
-	password := "password123"
-	hashedPass, _ := auth.HashPassword(password)
+	email := "owner@test.com"
+	pass := "pass"
+	hash, _ := auth.HashPassword(pass)
 	salt, _ := auth.GenerateRandomSalt()
 
-	_, err := s.db.Exec(ctx, `INSERT INTO organizations (id, name, code, created_at, updated_at) VALUES ($1, 'Test Corp', 'TEST', NOW(), NOW())`, orgID.String())
-	if err != nil { s.T().Fatal(err) }
+	s.db.Exec(ctx, `INSERT INTO organizations (id, name, code, created_at, updated_at) VALUES ($1, 'Test Corp', 'TEST', NOW(), NOW())`, orgID.String())
+	s.db.Exec(ctx, `INSERT INTO users (id, email, password, salt, role, created_at, updated_at) VALUES ($1, $2, $3, $4, 'user', NOW(), NOW())`, userID.String(), email, hash, salt)
+	s.db.Exec(ctx, `INSERT INTO organization_members (id, organization_id, user_id, role, created_at, updated_at) VALUES ($1, $2, $3, 'owner', NOW(), NOW())`, uuid.NewString(), orgID.String(), userID.String())
 
-	_, err = s.db.Exec(ctx, `INSERT INTO users (id, email, password, salt, role, created_at, updated_at) VALUES ($1, $2, $3, $4, 'user', NOW(), NOW())`, userID.String(), email, hashedPass, salt)
-	if err != nil { s.T().Fatal(err) }
-
-	_, err = s.db.Exec(ctx, `INSERT INTO organization_members (id, organization_id, user_id, role, created_at, updated_at) VALUES ($1, $2, $3, 'owner', NOW(), NOW())`, memberID.String(), orgID.String(), userID.String())
-	if err != nil { s.T().Fatal(err) }
-
-	resLogin := s.MakeRequest("POST", "/api/v1/auth/login", map[string]string{
-		"email":    email,
-		"password": password,
-	}, "")
-	
-	var dataLogin map[string]string
-	json.Unmarshal(resLogin.Body.Bytes(), &dataLogin)
-	
-	return dataLogin["token"], orgID.String()
+	res := s.MakeRequest("POST", "/api/v1/auth/login", map[string]string{"email": email, "password": pass}, "")
+	var data map[string]string
+	json.Unmarshal(res.Body.Bytes(), &data)
+	return data["token"], orgID.String()
 }
 
-func (s *BaseSuite) GetOrgIDByOwnerEmail(email string) string {
-	var orgID string
-	err := s.db.QueryRow(context.Background(), `SELECT organization_id FROM organization_members om JOIN users u ON om.user_id = u.id WHERE u.email = $1`, email).Scan(&orgID)
+func (s *BaseSuite) GetSuperAdminToken() string {
+	ctx := context.Background()
+	userID, _ := uuid.NewV7()
+	email := "super@admin.com"
+	pass := "supersecret"
+	hash, _ := auth.HashPassword(pass)
+	salt, _ := auth.GenerateRandomSalt()
+
+	_, err := s.db.Exec(ctx, `INSERT INTO users (id, email, password, salt, role, created_at, updated_at) VALUES ($1, $2, $3, $4, 'super_admin', NOW(), NOW())`, userID.String(), email, hash, salt)
 	if err != nil { s.T().Fatal(err) }
-	return orgID
+
+	res := s.MakeRequest("POST", "/api/v1/auth/login", map[string]string{"email": email, "password": pass}, "")
+	var data map[string]string
+	json.Unmarshal(res.Body.Bytes(), &data)
+	return data["token"]
 }

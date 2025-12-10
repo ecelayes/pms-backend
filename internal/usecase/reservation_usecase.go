@@ -51,7 +51,7 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 		return "", errors.New("children cannot be negative")
 	}
 
-	roomType, err := uc.roomRepo.GetRoomTypeByID(ctx, req.RoomTypeID)
+	roomType, err := uc.roomRepo.GetByID(ctx, req.RoomTypeID)
 	if err != nil {
 		return "", entity.ErrRoomTypeNotFound
 	}

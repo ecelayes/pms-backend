@@ -25,15 +25,27 @@ func NewUserUseCase(db *pgxpool.Pool, userRepo *repository.UserRepository, orgRe
 	}
 }
 
-func (uc *UserUseCase) CreateUser(ctx context.Context, req entity.CreateUserRequest) (string, error) {
+func (uc *UserUseCase) CreateUser(ctx context.Context, requesterRole string, req entity.CreateUserRequest) (string, error) {
 	if req.Email == "" || req.Password == "" {
 		return "", errors.New("email and password are required")
 	}
 	if req.OrganizationID == "" {
 		return "", errors.New("organization_id is required")
 	}
-	if req.Role != entity.OrgRoleOwner && req.Role != entity.OrgRoleManager && req.Role != entity.OrgRoleStaff {
-		return "", errors.New("invalid role")
+
+	switch req.Role {
+	case entity.OrgRoleOwner:
+		if requesterRole != entity.RoleSuperAdmin {
+			return "", errors.New("only super_admin can create organization owners")
+		}
+	
+	case entity.OrgRoleManager, entity.OrgRoleStaff:
+		if requesterRole != entity.RoleSuperAdmin && requesterRole != entity.OrgRoleOwner {
+			return "", errors.New("insufficient permissions to create staff")
+		}
+	
+	default:
+		return "", errors.New("invalid target role")
 	}
 
 	passwordHash, err := auth.HashPassword(req.Password)
@@ -67,4 +79,31 @@ func (uc *UserUseCase) CreateUser(ctx context.Context, req entity.CreateUserRequ
 	if err := tx.Commit(ctx); err != nil { return "", err }
 
 	return userID.String(), nil
+}
+
+func (uc *UserUseCase) GetAll(ctx context.Context, orgID string) ([]entity.User, error) {
+	if orgID == "" {
+		return nil, errors.New("organization_id is required")
+	}
+	return uc.userRepo.GetAllByOrganization(ctx, orgID)
+}
+
+func (uc *UserUseCase) GetByID(ctx context.Context, id string) (*entity.User, error) {
+	return uc.userRepo.GetByID(ctx, id)
+}
+
+func (uc *UserUseCase) Update(ctx context.Context, id string, orgID string, req entity.UpdateUserRequest) error {
+	if req.Role != "" {
+		switch req.Role {
+		case entity.OrgRoleOwner, entity.OrgRoleManager, entity.OrgRoleStaff:
+		default:
+			return errors.New("invalid role: must be 'owner', 'manager' or 'staff'")
+		}
+	}
+
+	return uc.userRepo.Update(ctx, id, orgID, req)
+}
+
+func (uc *UserUseCase) Delete(ctx context.Context, id string) error {
+	return uc.userRepo.Delete(ctx, id)
 }

@@ -35,6 +35,30 @@ func (r *OrganizationRepository) Create(ctx context.Context, tx pgx.Tx, org enti
 	return nil
 }
 
+func (r *OrganizationRepository) GetAll(ctx context.Context) ([]entity.Organization, error) {
+	query := `
+		SELECT id, name, code, created_at, updated_at 
+		FROM organizations 
+		WHERE deleted_at IS NULL 
+		ORDER BY name ASC
+	`
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("list organizations: %w", err)
+	}
+	defer rows.Close()
+
+	var list []entity.Organization
+	for rows.Next() {
+		var org entity.Organization
+		if err := rows.Scan(&org.ID, &org.Name, &org.Code, &org.CreatedAt, &org.UpdatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, org)
+	}
+	return list, nil
+}
+
 func (r *OrganizationRepository) GetByID(ctx context.Context, id string) (*entity.Organization, error) {
 	query := `
 		SELECT id, name, code, created_at, updated_at 

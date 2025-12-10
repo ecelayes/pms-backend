@@ -10,37 +10,33 @@ import (
 
 type UserSuite struct {
 	BaseSuite
-	adminToken string
+	ownerToken string
 	orgID      string
 }
 
 func (s *UserSuite) SetupTest() {
 	s.BaseSuite.SetupTest()
-	s.adminToken, s.orgID = s.GetAdminTokenAndOrg()
+	s.ownerToken, s.orgID = s.GetAdminTokenAndOrg()
 }
 
-func (s *UserSuite) TestCreateUserLinkedToOrg() {
+func (s *UserSuite) TestUserHierarchy() {
 	res := s.MakeRequest("POST", "/api/v1/users", map[string]string{
 		"organization_id": s.orgID,
 		"email":           "manager@corp.com",
 		"password":        "secret123",
 		"role":            "manager",
-	}, s.adminToken)
-	
-	s.Require().Equal(http.StatusCreated, res.Code)
+	}, s.ownerToken)
+	s.Equal(http.StatusCreated, res.Code)
 
-	var data map[string]string
-	json.Unmarshal(res.Body.Bytes(), &data)
-	userID := data["user_id"]
-	s.NotEmpty(userID)
-
-	resLogin := s.MakeRequest("POST", "/api/v1/auth/login", map[string]string{
-		"email":    "manager@corp.com",
-		"password": "secret123",
-	}, "")
+	resFail := s.MakeRequest("POST", "/api/v1/users", map[string]string{
+		"organization_id": s.orgID,
+		"email":           "another_owner@corp.com",
+		"password":        "secret123",
+		"role":            "owner",
+	}, s.ownerToken)
 	
-	s.Equal(http.StatusOK, resLogin.Code)
-	s.Contains(resLogin.Body.String(), "token")
+	s.Equal(http.StatusForbidden, resFail.Code)
+	s.Contains(resFail.Body.String(), "only super_admin can create organization owners")
 }
 
 func TestUserSuite(t *testing.T) {

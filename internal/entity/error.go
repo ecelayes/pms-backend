@@ -15,7 +15,7 @@ var (
 	ErrReservationCancelled = errors.New("reservation is already cancelled")
 	
 	// Business Rules (Pricing)
-	ErrPriceNegative = errors.New("price must be positive")
+	ErrPriceNegative 		= errors.New("price must be positive")
 	ErrPriorityNegative = errors.New("priority cannot be negative")
 
 	// Integrity
@@ -26,4 +26,11 @@ var (
 	ErrInvalidCredentials = errors.New("invalid email or password")
 	ErrUserNotFound       = errors.New("user not found")
 	ErrUserInactive       = errors.New("user account is inactive")
+
+	// Permissions
+	ErrInsufficientPermissions = errors.New("insufficient permissions")
+
+	// General
+	ErrRecordNotFound = errors.New("record not found")
+	ErrInternal       = errors.New("internal server error")
 )

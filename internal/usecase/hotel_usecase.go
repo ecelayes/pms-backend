@@ -47,6 +47,17 @@ func (uc *HotelUseCase) Create(ctx context.Context, req entity.CreateHotelReques
 	return uc.repo.Create(ctx, hotel)
 }
 
+func (uc *HotelUseCase) ListByOrganization(ctx context.Context, orgID string) ([]entity.Hotel, error) {
+	if orgID == "" {
+		return nil, errors.New("organization_id is required")
+	}
+	return uc.repo.ListByOrganization(ctx, orgID)
+}
+
+func (uc *HotelUseCase) GetByID(ctx context.Context, id string) (*entity.Hotel, error) {
+	return uc.repo.GetByID(ctx, id)
+}
+
 func (uc *HotelUseCase) Update(ctx context.Context, id string, req entity.UpdateHotelRequest) error {
 	if req.Name == "" && req.Code == "" {
 		return errors.New("nothing to update")
@@ -59,11 +70,4 @@ func (uc *HotelUseCase) Update(ctx context.Context, id string, req entity.Update
 
 func (uc *HotelUseCase) Delete(ctx context.Context, id string) error {
 	return uc.repo.Delete(ctx, id)
-}
-
-func (uc *HotelUseCase) ListByOrganization(ctx context.Context, orgID string) ([]entity.Hotel, error) {
-	if orgID == "" {
-		return nil, errors.New("organization_id is required")
-	}
-	return uc.repo.ListByOrganization(ctx, orgID)
 }

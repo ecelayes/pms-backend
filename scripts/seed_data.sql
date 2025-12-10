@@ -17,12 +17,21 @@ VALUES (
     NOW(), NOW()
 );
 
--- Password: "password123"
+INSERT INTO users (id, email, password, salt, role, created_at, updated_at) 
+VALUES (
+    '00000000-0000-0000-0000-000000000000', 
+    'admin@platform.com', 
+    '$2a$10$X7V.j.k.Z.y.x.w.v.u.t.s.r.q.p.o.n.m.l.k.j.i.h.g.f.e.d.c.b.a', -- 'admin123'
+    'salt_admin', 
+    'super_admin',
+    NOW(), NOW()
+);
+
 INSERT INTO users (id, email, password, salt, role, created_at, updated_at) 
 VALUES (
     '018e9a9d-0c8e-7000-0000-000000000002', 
     'ceo@globalresorts.com', 
-    '$2a$10$X7V.j.k.Z.y.x.w.v.u.t.s.r.q.p.o.n.m.l.k.j.i.h.g.f.e.d.c.b.a',
+    '$2a$10$X7V.j.k.Z.y.x.w.v.u.t.s.r.q.p.o.n.m.l.k.j.i.h.g.f.e.d.c.b.a', -- "password123"
     'random_salt', 
     'user',
     NOW(), NOW()

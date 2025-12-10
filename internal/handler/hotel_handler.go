@@ -33,6 +33,30 @@ func (h *HotelHandler) Create(c echo.Context) error {
 	return c.JSON(http.StatusCreated, map[string]string{"hotel_id": id})
 }
 
+func (h *HotelHandler) GetAll(c echo.Context) error {
+	orgID := c.QueryParam("organization_id")
+	
+	if orgID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "organization_id query param is required"})
+	}
+
+	hotels, err := h.uc.ListByOrganization(c.Request().Context(), orgID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{"data": hotels})
+}
+
+func (h *HotelHandler) GetByID(c echo.Context) error {
+	id := c.Param("id")
+	hotel, err := h.uc.GetByID(c.Request().Context(), id)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "hotel not found"})
+	}
+	return c.JSON(http.StatusOK, hotel)
+}
+
 func (h *HotelHandler) Update(c echo.Context) error {
 	id := c.Param("id")
 	var req entity.UpdateHotelRequest
@@ -49,19 +73,4 @@ func (h *HotelHandler) Delete(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	return c.JSON(http.StatusOK, map[string]string{"message": "hotel deleted"})
-}
-
-func (h *HotelHandler) GetAll(c echo.Context) error {
-	orgID := c.QueryParam("organization_id")
-	
-	if orgID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "organization_id query param is required"})
-	}
-
-	hotels, err := h.uc.ListByOrganization(c.Request().Context(), orgID)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
-	}
-
-	return c.JSON(http.StatusOK, map[string]interface{}{"data": hotels})
 }

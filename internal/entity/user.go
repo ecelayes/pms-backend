@@ -32,6 +32,11 @@ type RegisterOwnerRequest struct {
 	OrgName  string `json:"org_name"`
 }
 
+type UpdateUserRequest struct {
+	Email string `json:"email"`
+	Role  string `json:"role"`
+}
+
 type AuthResponse struct {
 	Token string `json:"token"`
 }

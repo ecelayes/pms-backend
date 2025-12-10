@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -45,6 +46,24 @@ func (r *ReservationRepository) UpdateStatus(ctx context.Context, id string, sta
 		return entity.ErrReservationNotFound
 	}
 	return nil
+}
+
+func (r *ReservationRepository) CountOverlapping(ctx context.Context, roomTypeID string, start, end time.Time) (int, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM reservations
+		WHERE room_type_id = $1 
+		  AND status != 'cancelled'
+		  AND start < $3 
+		  AND end > $2
+		  AND deleted_at IS NULL
+	`
+	var count int
+	err := r.db.QueryRow(ctx, query, roomTypeID, start, end).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count overlapping reservations: %w", err)
+	}
+	return count, nil
 }
 
 func (r *ReservationRepository) GetByCode(ctx context.Context, code string) (*entity.Reservation, error) {
