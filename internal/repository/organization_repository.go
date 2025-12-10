@@ -111,6 +111,9 @@ func (r *OrganizationRepository) AddMember(ctx context.Context, tx pgx.Tx, membe
 	} else {
 		_, err = r.db.Exec(ctx, query, member.ID, member.OrganizationID, member.UserID, member.Role)
 	}
-	if err != nil { return fmt.Errorf("add member: %w", err) }
+	
+	if err != nil {
+		return fmt.Errorf("add member: %w", err)
+	}
 	return nil
 }

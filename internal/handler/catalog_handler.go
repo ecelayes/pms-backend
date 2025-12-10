@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"errors"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/ecelayes/pms-backend/internal/entity"
 	"github.com/ecelayes/pms-backend/internal/usecase"
@@ -19,9 +18,11 @@ func NewCatalogHandler(uc *usecase.CatalogUseCase) *CatalogHandler {
 }
 
 func getRoleFromToken(c echo.Context) string {
-	user := c.Get("user").(*jwt.Token)
-	claims := user.Claims.(jwt.MapClaims)
-	return claims["role"].(string)
+	role, ok := c.Get("role").(string)
+	if !ok {
+		return ""
+	}
+	return role
 }
 
 func (h *CatalogHandler) CreateAmenity(c echo.Context) error {

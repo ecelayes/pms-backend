@@ -69,7 +69,7 @@ func (s *BaseSuite) GetAdminTokenAndOrg() (string, string) {
 	salt, _ := auth.GenerateRandomSalt()
 
 	s.db.Exec(ctx, `INSERT INTO organizations (id, name, code, created_at, updated_at) VALUES ($1, 'Test Corp', 'TEST', NOW(), NOW())`, orgID.String())
-	s.db.Exec(ctx, `INSERT INTO users (id, email, password, salt, role, created_at, updated_at) VALUES ($1, $2, $3, $4, 'user', NOW(), NOW())`, userID.String(), email, hash, salt)
+	s.db.Exec(ctx, `INSERT INTO users (id, email, password, salt, role, created_at, updated_at) VALUES ($1, $2, $3, $4, 'owner', NOW(), NOW())`, userID.String(), email, hash, salt)
 	s.db.Exec(ctx, `INSERT INTO organization_members (id, organization_id, user_id, role, created_at, updated_at) VALUES ($1, $2, $3, 'owner', NOW(), NOW())`, uuid.NewString(), orgID.String(), userID.String())
 
 	res := s.MakeRequest("POST", "/api/v1/auth/login", map[string]string{"email": email, "password": pass}, "")
