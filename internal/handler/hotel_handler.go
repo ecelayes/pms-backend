@@ -17,10 +17,19 @@ func NewHotelHandler(uc *usecase.HotelUseCase) *HotelHandler {
 
 func (h *HotelHandler) Create(c echo.Context) error {
 	var req entity.CreateHotelRequest
-	if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
-	ownerID := c.Get("user_id").(string)
-	id, err := h.uc.Create(c.Request().Context(), ownerID, req)
-	if err != nil { return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()}) }
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
+	}
+
+	if req.OrganizationID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "organization_id is required"})
+	}
+
+	id, err := h.uc.Create(c.Request().Context(), req)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
 	return c.JSON(http.StatusCreated, map[string]string{"hotel_id": id})
 }
 
@@ -42,11 +51,17 @@ func (h *HotelHandler) Delete(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "hotel deleted"})
 }
 
-func (h *HotelHandler) ListMine(c echo.Context) error {
-	ownerID := c.Get("user_id").(string)
-	hotels, err := h.uc.ListMine(c.Request().Context(), ownerID)
+func (h *HotelHandler) GetAll(c echo.Context) error {
+	orgID := c.QueryParam("organization_id")
+	
+	if orgID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "organization_id query param is required"})
+	}
+
+	hotels, err := h.uc.ListByOrganization(c.Request().Context(), orgID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
+
 	return c.JSON(http.StatusOK, map[string]interface{}{"data": hotels})
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ecelayes/pms-backend/internal/entity"
 )
@@ -19,18 +18,20 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-func (r *UserRepository) Create(ctx context.Context, id, email, password, salt, role string) error {
+func (r *UserRepository) Create(ctx context.Context, tx pgx.Tx, id, email, password, salt, role string) error {
 	query := `
 		INSERT INTO users (id, email, password, salt, role, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
 	`
-	_, err := r.db.Exec(ctx, query, id, email, password, salt, role)
+	var err error
+	if tx != nil {
+		_, err = tx.Exec(ctx, query, id, email, password, salt, role)
+	} else {
+		_, err = r.db.Exec(ctx, query, id, email, password, salt, role)
+	}
+
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return entity.ErrEmailAlreadyExists
-		}
-		return fmt.Errorf("db error: %w", err)
+		return fmt.Errorf("create user: %w", err)
 	}
 	return nil
 }

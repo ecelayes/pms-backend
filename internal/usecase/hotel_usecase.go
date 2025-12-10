@@ -19,7 +19,10 @@ func NewHotelUseCase(repo *repository.HotelRepository) *HotelUseCase {
 	return &HotelUseCase{repo: repo}
 }
 
-func (uc *HotelUseCase) Create(ctx context.Context, ownerID string, req entity.CreateHotelRequest) (string, error) {
+func (uc *HotelUseCase) Create(ctx context.Context, req entity.CreateHotelRequest) (string, error) {
+	if req.OrganizationID == "" {
+		return "", errors.New("organization_id is required")
+	}
 	if req.Name == "" || req.Code == "" {
 		return "", errors.New("name and code are required")
 	}
@@ -36,9 +39,9 @@ func (uc *HotelUseCase) Create(ctx context.Context, ownerID string, req entity.C
 		BaseEntity: entity.BaseEntity{
 			ID: hotelID.String(),
 		},
-		OwnerID: ownerID,
-		Name:    req.Name,
-		Code:    strings.ToUpper(req.Code),
+		OrganizationID: req.OrganizationID, 
+		Name:           req.Name,
+		Code:           strings.ToUpper(req.Code),
 	}
 
 	return uc.repo.Create(ctx, hotel)
@@ -58,6 +61,9 @@ func (uc *HotelUseCase) Delete(ctx context.Context, id string) error {
 	return uc.repo.Delete(ctx, id)
 }
 
-func (uc *HotelUseCase) ListMine(ctx context.Context, ownerID string) ([]entity.Hotel, error) {
-	return uc.repo.ListByOwner(ctx, ownerID)
+func (uc *HotelUseCase) ListByOrganization(ctx context.Context, orgID string) ([]entity.Hotel, error) {
+	if orgID == "" {
+		return nil, errors.New("organization_id is required")
+	}
+	return uc.repo.ListByOrganization(ctx, orgID)
 }

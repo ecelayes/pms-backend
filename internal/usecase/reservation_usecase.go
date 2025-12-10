@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ecelayes/pms-backend/internal/entity"
 	"github.com/ecelayes/pms-backend/internal/repository"
+	"github.com/ecelayes/pms-backend/internal/utils"
 )
 
 type ReservationUseCase struct {
@@ -27,15 +27,6 @@ func NewReservationUseCase(db *pgxpool.Pool, roomRepo *repository.RoomRepository
 		resRepo:   resRepo,
 		guestRepo: guestRepo,
 	}
-}
-
-func generateSuffix(length int) string {
-	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
-	}
-	return string(b)
 }
 
 func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReservationRequest) (string, error) {
@@ -79,7 +70,7 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 	if err != nil {
 		return "", entity.ErrRoomTypeNotFound
 	}
-	resCode := fmt.Sprintf("%s-%s-%s", hotelCode, roomCode, generateSuffix(4))
+	resCode := fmt.Sprintf("%s-%s-%s", hotelCode, roomCode, utils.GenerateRandomCode(4))
 
 	dailyRates, err := uc.roomRepo.GetDailyPrices(ctx, req.RoomTypeID, start, end)
 	if err != nil {

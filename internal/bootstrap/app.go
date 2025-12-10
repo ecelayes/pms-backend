@@ -18,13 +18,16 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	hotelRepo := repository.NewHotelRepository(pool)
 	priceRepo := repository.NewPriceRepository(pool)
 	userRepo := repository.NewUserRepository(pool)
+	orgRepo := repository.NewOrganizationRepository(pool)
 	guestRepo := repository.NewGuestRepository(pool)
 
 	// 2. UseCases
 	availUC := usecase.NewAvailabilityUseCase(roomRepo)
 	resUC := usecase.NewReservationUseCase(pool, roomRepo, resRepo, guestRepo)
 	pricingUC := usecase.NewPricingUseCase(priceRepo, roomRepo)
-	authUC := usecase.NewAuthUseCase(userRepo)
+	authUC := usecase.NewAuthUseCase(pool, userRepo)
+	orgUC := usecase.NewOrganizationUseCase(orgRepo)
+	userUC := usecase.NewUserUseCase(pool, userRepo, orgRepo)
 	hotelUC := usecase.NewHotelUseCase(hotelRepo)
 	roomUC := usecase.NewRoomUseCase(roomRepo)
 
@@ -35,6 +38,8 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	authHandler := handler.NewAuthHandler(authUC)
 	hotelHandler := handler.NewHotelHandler(hotelUC)
 	roomHandler := handler.NewRoomHandler(roomUC)
+	orgHandler := handler.NewOrganizationHandler(orgUC)
+	userHandler := handler.NewUserHandler(userUC)
 
 	// 4. Server Setup
 	e := echo.New()
@@ -46,7 +51,6 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	v1 := e.Group("/api/v1")
 
 	// Public
-	v1.POST("/auth/register", authHandler.Register)
 	v1.POST("/auth/login", authHandler.Login)
 	v1.GET("/availability", availHandler.Get)
 	v1.POST("/reservations", resHandler.Create)
@@ -56,10 +60,19 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	// Protected
 	protected := v1.Group("")
 	protected.Use(security.Auth(authUC))
+
+	// Organizations
+	protected.POST("/organizations", orgHandler.Create)
+	protected.GET("/organizations/:id", orgHandler.GetByID)
+	protected.PUT("/organizations/:id", orgHandler.Update)
+	protected.DELETE("/organizations/:id", orgHandler.Delete)
+
+	// Users
+	protected.POST("/users", userHandler.Create)
 	
 	// Hotels CRUD
 	protected.POST("/hotels", hotelHandler.Create)
-	protected.GET("/hotels", hotelHandler.ListMine)
+	protected.GET("/hotels", hotelHandler.GetAll)
 	protected.PUT("/hotels/:id", hotelHandler.Update)
 	protected.DELETE("/hotels/:id", hotelHandler.Delete)
 

@@ -18,7 +18,7 @@ VALUES (
     '10101010'
 );
 
-INSERT INTO hotels (id, owner_id, name, code)
+INSERT INTO hotels (id, organization_id, name, code)
 VALUES (
     '018e9a9d-0c8e-7111-2222-333344445555',
     '018e9a9d-0c8e-7f12-8d3a-123456789001',
