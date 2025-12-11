@@ -9,6 +9,7 @@ import (
 	"github.com/ecelayes/pms-backend/internal/repository"
 	"github.com/ecelayes/pms-backend/internal/security"
 	"github.com/ecelayes/pms-backend/internal/usecase"
+	"github.com/ecelayes/pms-backend/internal/service"
 )
 
 func NewApp(pool *pgxpool.Pool) *echo.Echo {
@@ -22,10 +23,14 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	guestRepo := repository.NewGuestRepository(pool)
 	amenityRepo := repository.NewAmenityRepository(pool)
 	serviceRepo := repository.NewHotelServiceRepository(pool)
+	ratePlanRepo := repository.NewRatePlanRepository(pool)
+
+	// 1.5 Domain Services
+	pricingService := service.NewPricingService(priceRepo)
 
 	// 2. UseCases
-	availUC := usecase.NewAvailabilityUseCase(roomRepo, resRepo, priceRepo)
-	resUC := usecase.NewReservationUseCase(pool, roomRepo, resRepo, guestRepo)
+	availUC := usecase.NewAvailabilityUseCase(roomRepo, resRepo, ratePlanRepo, pricingService)
+	resUC := usecase.NewReservationUseCase(pool, roomRepo, resRepo, guestRepo, ratePlanRepo, pricingService)
 	pricingUC := usecase.NewPricingUseCase(priceRepo, roomRepo)
 	authUC := usecase.NewAuthUseCase(pool, userRepo)
 	orgUC := usecase.NewOrganizationUseCase(orgRepo)
@@ -33,6 +38,7 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	hotelUC := usecase.NewHotelUseCase(hotelRepo)
 	roomUC := usecase.NewRoomUseCase(roomRepo)
 	catalogUC := usecase.NewCatalogUseCase(amenityRepo, serviceRepo)
+	ratePlanUC := usecase.NewRatePlanUseCase(ratePlanRepo, resRepo)
 
 	// 3. Handlers
 	availHandler := handler.NewAvailabilityHandler(availUC)
@@ -44,6 +50,7 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	orgHandler := handler.NewOrganizationHandler(orgUC)
 	userHandler := handler.NewUserHandler(userUC)
 	catalogHandler := handler.NewCatalogHandler(catalogUC)
+	ratePlanHandler := handler.NewRatePlanHandler(ratePlanUC)
 
 	// 4. Server Setup
 	e := echo.New()
@@ -115,6 +122,13 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	protected.GET("/pricing/rules", pricingHandler.GetRules)
 	protected.PUT("/pricing/rules/:id", pricingHandler.UpdateRule)
 	protected.DELETE("/pricing/rules/:id", pricingHandler.DeleteRule)
+
+	// Rate Plans CRUD
+	protected.POST("/rate-plans", ratePlanHandler.Create)
+	protected.GET("/rate-plans", ratePlanHandler.List)
+	protected.GET("/rate-plans/:id", ratePlanHandler.GetByID)
+	protected.PUT("/rate-plans/:id", ratePlanHandler.Update)
+	protected.DELETE("/rate-plans/:id", ratePlanHandler.Delete)
 
 	return e
 }

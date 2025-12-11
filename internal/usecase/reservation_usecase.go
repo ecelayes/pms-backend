@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ecelayes/pms-backend/internal/entity"
 	"github.com/ecelayes/pms-backend/internal/repository"
+	"github.com/ecelayes/pms-backend/internal/service"
 	"github.com/ecelayes/pms-backend/internal/utils"
 )
 
@@ -18,19 +19,31 @@ type ReservationUseCase struct {
 	roomRepo *repository.RoomRepository
 	resRepo  *repository.ReservationRepository
 	guestRepo *repository.GuestRepository
+	ratePlanRepo *repository.RatePlanRepository
+	pricingService *service.PricingService
 }
 
-func NewReservationUseCase(db *pgxpool.Pool, roomRepo *repository.RoomRepository, resRepo *repository.ReservationRepository, guestRepo *repository.GuestRepository) *ReservationUseCase {
+func NewReservationUseCase(
+	db *pgxpool.Pool,
+	roomRepo *repository.RoomRepository,
+	resRepo *repository.ReservationRepository,
+	guestRepo *repository.GuestRepository,
+	ratePlanRepo *repository.RatePlanRepository,
+	pricingService *service.PricingService,
+) *ReservationUseCase {
 	return &ReservationUseCase{
-		db:        db,
-		roomRepo:  roomRepo,
-		resRepo:   resRepo,
-		guestRepo: guestRepo,
+		db:             db,
+		roomRepo:       roomRepo,
+		resRepo:        resRepo,
+		guestRepo:      guestRepo,
+		ratePlanRepo:   ratePlanRepo,
+		pricingService: pricingService,
 	}
 }
 
 func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReservationRequest) (string, error) {
 	layout := "2006-01-02"
+
 	start, err := time.Parse(layout, req.Start)
 	if err != nil {
 		return "", entity.ErrInvalidDateFormat
@@ -43,6 +56,8 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 	if !end.After(start) {
 		return "", entity.ErrInvalidDateRange
 	}
+
+	nights := int(end.Sub(start).Hours() / 24)
 
 	if req.Adults <= 0 {
 		return "", errors.New("at least 1 adult is required")
@@ -72,19 +87,32 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 	}
 	resCode := fmt.Sprintf("%s-%s-%s", hotelCode, roomCode, utils.GenerateRandomCode(4))
 
-	dailyRates, err := uc.roomRepo.GetDailyPrices(ctx, req.RoomTypeID, start, end)
+	dailyRates, baseTotal, err := uc.pricingService.CalculateBaseRates(ctx, req.RoomTypeID, start, end)
 	if err != nil {
-		return "", err
+		return "", entity.ErrNoAvailability 
 	}
-
-	expectedNights := int(end.Sub(start).Hours() / 24)
-	if len(dailyRates) != expectedNights {
+	
+	if len(dailyRates) != nights {
 		return "", entity.ErrNoAvailability
 	}
 
-	var totalPrice float64
-	for _, rate := range dailyRates {
-		totalPrice += rate.Price
+	finalPrice := baseTotal
+
+	if req.RatePlanID != nil && *req.RatePlanID != "" {
+		rp, err := uc.ratePlanRepo.GetByID(ctx, *req.RatePlanID)
+		if err != nil {
+			return "", fmt.Errorf("invalid rate plan: %w", err)
+		}
+		
+		if rp.RoomTypeID != nil && *rp.RoomTypeID != req.RoomTypeID {
+			return "", errors.New("rate plan not applicable to this room type")
+		}
+		if !rp.Active {
+			return "", errors.New("rate plan is not active")
+		}
+
+		totalPax := req.Adults + req.Children
+		finalPrice = uc.pricingService.ApplyRatePlan(baseTotal, *rp, totalPax, nights)
 	}
 
 	tx, err := uc.db.Begin(ctx)
@@ -180,7 +208,8 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 		GuestID:         guestID,
 		Start:           start,
 		End:             end,
-		TotalPrice:      totalPrice,
+		RatePlanID:      req.RatePlanID,
+		TotalPrice:      finalPrice,
 		Status:          "confirmed",
 		
 		Adults:   req.Adults,

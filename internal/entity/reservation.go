@@ -7,6 +7,7 @@ type Reservation struct {
 	
 	ReservationCode string    `json:"reservation_code"`
 	RoomTypeID      string    `json:"room_type_id"`
+	RatePlanID      *string   `json:"rate_plan_id,omitempty"`
 	GuestID         string    `json:"guest_id"`
 	Start           time.Time `json:"start"`
 	End             time.Time `json:"end"`
@@ -18,7 +19,8 @@ type Reservation struct {
 }
 
 type CreateReservationRequest struct {
-	RoomTypeID string `json:"room_type_id"`
+	RoomTypeID string  `json:"room_type_id"`
+	RatePlanID *string `json:"rate_plan_id"`
 	
 	GuestEmail     string `json:"guest_email"`
 	GuestFirstName string `json:"guest_first_name"`

@@ -80,6 +80,10 @@ test-pricing: test-prepare
 	@echo "Running Pricing Tests"
 	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestPricingSuite
 
+test-rate-plan: test-prepare
+	@echo "Running Rate Plan Tests"
+	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestRatePlanSuite
+
 test-reservation: test-prepare
 	@echo "Running Reservation Tests"
 	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestReservationSuite

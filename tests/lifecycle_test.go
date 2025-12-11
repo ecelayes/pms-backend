@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/ecelayes/pms-backend/internal/entity"
 )
 
 type LifecycleSuite struct {
@@ -15,6 +16,7 @@ type LifecycleSuite struct {
 	orgID      string
 	hotelID    string
 	roomID     string
+	ratePlanID string
 }
 
 func (s *LifecycleSuite) TestFullLifecycle() {
@@ -80,7 +82,7 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 		s.roomID = data["room_type_id"]
 	})
 
-	s.Run("6. Set Pricing", func() {
+	s.Run("6. Set Pricing (Base Rate)", func() {
 		res := s.MakeRequest("POST", "/api/v1/pricing/rules", map[string]interface{}{
 			"room_type_id": s.roomID,
 			"start": "2025-10-01", "end": "2025-10-10", "price": 200.0, "priority": 10,
@@ -88,9 +90,38 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 		s.Equal(http.StatusCreated, res.Code)
 	})
 
-	s.Run("7. Customer Reservation", func() {
+	s.Run("7. Create Rate Plan (Bed & Breakfast)", func() {
+		reqBody := map[string]interface{}{
+			"hotel_id":     s.hotelID,
+			"room_type_id": s.roomID,
+			"name":         "Bed & Breakfast",
+			"description":  "Standard rate with breakfast included",
+			"meal_plan": map[string]interface{}{
+				"included":      true,
+				"price_per_pax": 25.0,
+				"type":          1, 
+			},
+			"cancellation_policy": map[string]interface{}{
+				"is_refundable": true,
+				"rules": []interface{}{}, 
+			},
+			"payment_policy": map[string]interface{}{
+				"timing": 0, "method": 0,
+			},
+		}
+
+		res := s.MakeRequest("POST", "/api/v1/rate-plans", reqBody, s.ownerToken)
+		s.Require().Equal(http.StatusCreated, res.Code)
+		
+		var data map[string]string
+		json.Unmarshal(res.Body.Bytes(), &data)
+		s.ratePlanID = data["rate_plan_id"]
+	})
+
+	s.Run("8. Customer Reservation with Rate Plan", func() {
 		res := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
 			"room_type_id":     s.roomID,
+			"rate_plan_id":     s.ratePlanID,
 			"guest_email":      "client@mail.com",
 			"guest_first_name": "Client", "guest_last_name": "One",
 			"start":            "2025-10-01", "end": "2025-10-05",
@@ -100,7 +131,20 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 		if res.Code != http.StatusCreated {
 			s.T().Logf("Reservation failed: %s", res.Body.String())
 		}
-		s.Equal(http.StatusCreated, res.Code)
+		s.Require().Equal(http.StatusCreated, res.Code)
+
+		var dataRes map[string]interface{}
+		json.Unmarshal(res.Body.Bytes(), &dataRes)
+		code := dataRes["reservation_code"].(string)
+
+		resGet := s.MakeRequest("GET", "/api/v1/reservations/"+code, nil, "")
+		s.Equal(http.StatusOK, resGet.Code)
+
+		var reservation entity.Reservation
+		json.Unmarshal(resGet.Body.Bytes(), &reservation)
+
+		s.Equal(1000.0, reservation.TotalPrice, "El precio total debe incluir alojamiento + desayuno")
+		s.Equal(s.ratePlanID, *reservation.RatePlanID)
 	})
 }
 

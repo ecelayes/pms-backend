@@ -22,13 +22,13 @@ func (r *ReservationRepository) Create(ctx context.Context, tx pgx.Tx, res entit
 	query := `
 		INSERT INTO reservations (
 			id, room_type_id, reservation_code, stay_range, guest_id, 
-			total_price, status, adults, children
+			total_price, status, adults, children, rate_plan_id
 		)
-		VALUES ($1, $2, $3, daterange($4::date, $5::date), $6, $7, 'confirmed', $8, $9)
+		VALUES ($1, $2, $3, daterange($4::date, $5::date), $6, $7, 'confirmed', $8, $9, $10)
 	`
 	_, err := tx.Exec(ctx, query, 
 		res.ID, res.RoomTypeID, res.ReservationCode, res.Start, res.End, res.GuestID, 
-		res.TotalPrice, res.Adults, res.Children,
+		res.TotalPrice, res.Adults, res.Children, res.RatePlanID, // <--- Pasamos el puntero
 	)
 	if err != nil {
 		return fmt.Errorf("insert reservation: %w", err)
@@ -66,10 +66,27 @@ func (r *ReservationRepository) CountOverlapping(ctx context.Context, roomTypeID
 	return count, nil
 }
 
+func (r *ReservationRepository) CountActiveByRatePlan(ctx context.Context, ratePlanID string) (int, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM reservations
+		WHERE rate_plan_id = $1 
+		  AND status IN ('confirmed', 'checked_in')
+		  AND upper(stay_range) >= CURRENT_DATE
+		  AND deleted_at IS NULL
+	`
+	var count int
+	err := r.db.QueryRow(ctx, query, ratePlanID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count active reservations by rate plan: %w", err)
+	}
+	return count, nil
+}
+
 func (r *ReservationRepository) GetByCode(ctx context.Context, code string) (*entity.Reservation, error) {
 	query := `
 		SELECT id, reservation_code, room_type_id, guest_id, lower(stay_range), upper(stay_range), 
-		       total_price, status, adults, children, created_at, updated_at
+		       total_price, status, adults, children, rate_plan_id, created_at, updated_at
 		FROM reservations
 		WHERE reservation_code = $1 AND deleted_at IS NULL
 	`
@@ -77,7 +94,7 @@ func (r *ReservationRepository) GetByCode(ctx context.Context, code string) (*en
 	err := r.db.QueryRow(ctx, query, code).Scan(
 		&res.ID, &res.ReservationCode, &res.RoomTypeID, &res.GuestID, 
 		&res.Start, &res.End, &res.TotalPrice, &res.Status, 
-		&res.Adults, &res.Children,
+		&res.Adults, &res.Children, &res.RatePlanID,
 		&res.CreatedAt, &res.UpdatedAt,
 	)
 	if err != nil {
