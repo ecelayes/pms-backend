@@ -87,7 +87,13 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 	}
 	resCode := fmt.Sprintf("%s-%s-%s", hotelCode, roomCode, utils.GenerateRandomCode(4))
 
-	dailyRates, baseTotal, err := uc.pricingService.CalculateBaseRates(ctx, req.RoomTypeID, start, end)
+	dailyRates, baseTotal, err := uc.pricingService.CalculateBaseRates(
+    ctx,
+    req.RoomTypeID,
+    roomType.BasePrice,
+    start,
+    end,
+	)
 	if err != nil {
 		return "", entity.ErrNoAvailability 
 	}

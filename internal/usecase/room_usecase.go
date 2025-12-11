@@ -29,6 +29,9 @@ func (uc *RoomUseCase) Create(ctx context.Context, req entity.CreateRoomTypeRequ
 	if req.TotalQuantity < 0 {
 		return "", errors.New("total quantity cannot be negative")
 	}
+	if req.BasePrice < 0 {
+		return "", errors.New("base price cannot be negative")
+	}
 	if req.MaxOccupancy <= 0 {
 		return "", errors.New("max occupancy must be at least 1")
 	}
@@ -49,7 +52,7 @@ func (uc *RoomUseCase) Create(ctx context.Context, req entity.CreateRoomTypeRequ
 		Name:          req.Name,
 		Code:          strings.ToUpper(req.Code),
 		TotalQuantity: req.TotalQuantity,
-		
+		BasePrice:     req.BasePrice,
 		MaxOccupancy:  req.MaxOccupancy,
 		MaxAdults:     req.MaxAdults,
 		MaxChildren:   req.MaxChildren,
@@ -71,18 +74,26 @@ func (uc *RoomUseCase) GetByID(ctx context.Context, id string) (*entity.RoomType
 }
 
 func (uc *RoomUseCase) Update(ctx context.Context, id string, req entity.UpdateRoomTypeRequest) error {
-	if req.TotalQuantity < 0 {
+	if req.TotalQuantity != nil && *req.TotalQuantity < 0 {
 		return errors.New("total quantity cannot be negative")
 	}
-	if req.MaxOccupancy <= 0 {
+	if req.MaxOccupancy != nil && *req.MaxOccupancy <= 0 {
 		return errors.New("max occupancy must be at least 1")
 	}
-	if req.MaxAdults <= 0 {
+	if req.MaxAdults != nil && *req.MaxAdults <= 0 {
 		return errors.New("max adults must be at least 1")
 	}
+	if req.MaxChildren != nil && *req.MaxChildren < 0 {
+		return errors.New("max children cannot be negative")
+	}
+	if req.BasePrice != nil && *req.BasePrice < 0 {
+		return errors.New("base price cannot be negative")
+	}
+
 	if req.Code != "" {
 		req.Code = strings.ToUpper(req.Code)
 	}
+	
 	return uc.repo.Update(ctx, id, req)
 }
 

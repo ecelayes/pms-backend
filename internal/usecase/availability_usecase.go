@@ -81,7 +81,13 @@ func (uc *AvailabilityUseCase) Search(ctx context.Context, filter entity.Availab
 			continue
 		}
 
-		baseDailyRates, baseTotal, err := uc.pricingService.CalculateBaseRates(ctx, rt.ID, filter.Start, filter.End)
+		baseDailyRates, baseTotal, err := uc.pricingService.CalculateBaseRates(
+			ctx,
+			rt.ID,
+			rt.BasePrice,
+			filter.Start,
+			filter.End,
+		)
 		if err != nil {
 			continue 
 		}

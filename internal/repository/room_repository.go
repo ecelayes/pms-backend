@@ -20,13 +20,16 @@ func NewRoomRepository(db *pgxpool.Pool) *RoomRepository {
 
 func (r *RoomRepository) CreateRoomType(ctx context.Context, rt entity.RoomType) (string, error) {
 	query := `
-		INSERT INTO room_types (hotel_id, name, code, total_quantity, max_occupancy, max_adults, max_children, amenities)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO room_types (
+			hotel_id, name, code, total_quantity, base_price, 
+			max_occupancy, max_adults, max_children, amenities
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id
 	`
 	var id string
 	err := r.db.QueryRow(ctx, query, 
-		rt.HotelID, rt.Name, rt.Code, rt.TotalQuantity, 
+		rt.HotelID, rt.Name, rt.Code, rt.TotalQuantity, rt.BasePrice,
 		rt.MaxOccupancy, rt.MaxAdults, rt.MaxChildren, rt.Amenities,
 	).Scan(&id)
 	
@@ -38,7 +41,9 @@ func (r *RoomRepository) CreateRoomType(ctx context.Context, rt entity.RoomType)
 
 func (r *RoomRepository) GetAll(ctx context.Context) ([]entity.RoomType, error) {
 	query := `
-		SELECT id, hotel_id, name, code, total_quantity, max_occupancy, max_adults, max_children, amenities, created_at, updated_at
+		SELECT id, hotel_id, name, code, total_quantity, base_price,
+		       max_occupancy, max_adults, max_children, amenities, 
+		       created_at, updated_at
 		FROM room_types
 		WHERE deleted_at IS NULL
 	`
@@ -52,35 +57,7 @@ func (r *RoomRepository) GetAll(ctx context.Context) ([]entity.RoomType, error) 
 	for rows.Next() {
 		var rt entity.RoomType
 		err := rows.Scan(
-			&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity,
-			&rt.MaxOccupancy, &rt.MaxAdults, &rt.MaxChildren, &rt.Amenities,
-			&rt.CreatedAt, &rt.UpdatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-		rooms = append(rooms, rt)
-	}
-	return rooms, nil
-}
-
-func (r *RoomRepository) ListByHotel(ctx context.Context, hotelID string) ([]entity.RoomType, error) {
-	query := `
-		SELECT id, hotel_id, name, code, total_quantity, max_occupancy, max_adults, max_children, amenities, created_at, updated_at
-		FROM room_types
-		WHERE hotel_id = $1 AND deleted_at IS NULL
-	`
-	rows, err := r.db.Query(ctx, query, hotelID)
-	if err != nil {
-		return nil, fmt.Errorf("list room types: %w", err)
-	}
-	defer rows.Close()
-
-	var rooms []entity.RoomType
-	for rows.Next() {
-		var rt entity.RoomType
-		err := rows.Scan(
-			&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity,
+			&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity, &rt.BasePrice,
 			&rt.MaxOccupancy, &rt.MaxAdults, &rt.MaxChildren, &rt.Amenities,
 			&rt.CreatedAt, &rt.UpdatedAt,
 		)
@@ -94,13 +71,15 @@ func (r *RoomRepository) ListByHotel(ctx context.Context, hotelID string) ([]ent
 
 func (r *RoomRepository) GetByID(ctx context.Context, id string) (*entity.RoomType, error) {
 	query := `
-		SELECT id, hotel_id, name, code, total_quantity, max_occupancy, max_adults, max_children, amenities, created_at, updated_at
+		SELECT id, hotel_id, name, code, total_quantity, base_price,
+		       max_occupancy, max_adults, max_children, amenities, 
+		       created_at, updated_at
 		FROM room_types
 		WHERE id = $1 AND deleted_at IS NULL
 	`
 	var rt entity.RoomType
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity,
+		&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity, &rt.BasePrice,
 		&rt.MaxOccupancy, &rt.MaxAdults, &rt.MaxChildren, &rt.Amenities,
 		&rt.CreatedAt, &rt.UpdatedAt,
 	)
@@ -113,22 +92,104 @@ func (r *RoomRepository) GetByID(ctx context.Context, id string) (*entity.RoomTy
 	return &rt, nil
 }
 
-func (r *RoomRepository) Update(ctx context.Context, id string, req entity.UpdateRoomTypeRequest) error {
+func (r *RoomRepository) ListByHotel(ctx context.Context, hotelID string) ([]entity.RoomType, error) {
 	query := `
-		UPDATE room_types 
-		SET name = $2, code = $3, total_quantity = $4, max_occupancy = $5, max_adults = $6, max_children = $7, amenities = $8
-		WHERE id = $1 AND deleted_at IS NULL
+		SELECT id, hotel_id, name, code, total_quantity, base_price,
+		       max_occupancy, max_adults, max_children, amenities, 
+		       created_at, updated_at
+		FROM room_types
+		WHERE hotel_id = $1 AND deleted_at IS NULL
 	`
-	cmd, err := r.db.Exec(ctx, query, 
-		id, req.Name, req.Code, req.TotalQuantity, 
-		req.MaxOccupancy, req.MaxAdults, req.MaxChildren, req.Amenities,
-	)
+	rows, err := r.db.Query(ctx, query, hotelID)
+	if err != nil {
+		return nil, fmt.Errorf("list room types: %w", err)
+	}
+	defer rows.Close()
+
+	var rooms []entity.RoomType
+	for rows.Next() {
+		var rt entity.RoomType
+		err := rows.Scan(
+			&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity, &rt.BasePrice,
+			&rt.MaxOccupancy, &rt.MaxAdults, &rt.MaxChildren, &rt.Amenities,
+			&rt.CreatedAt, &rt.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		rooms = append(rooms, rt)
+	}
+	return rooms, nil
+}
+
+func (r *RoomRepository) Update(ctx context.Context, id string, req entity.UpdateRoomTypeRequest) error {
+	query := `UPDATE room_types SET updated_at = NOW()`
+	args := []interface{}{}
+	argID := 1
+
+	addSet := func(column string, value interface{}) {
+		query += fmt.Sprintf(", %s = $%d", column, argID)
+		args = append(args, value)
+		argID++
+	}
+
+	if req.Name != "" {
+		addSet("name", req.Name)
+	}
+	if req.Code != "" {
+		addSet("code", req.Code)
+	}
+
+	if req.TotalQuantity != nil {
+		if *req.TotalQuantity < 0 {
+			return fmt.Errorf("total quantity cannot be negative")
+		}
+		addSet("total_quantity", *req.TotalQuantity)
+	}
+
+	if req.MaxOccupancy != nil {
+		if *req.MaxOccupancy <= 0 {
+			return fmt.Errorf("max occupancy must be positive")
+		}
+		addSet("max_occupancy", *req.MaxOccupancy)
+	}
+
+	if req.MaxAdults != nil {
+		if *req.MaxAdults <= 0 {
+			return fmt.Errorf("max adults must be positive")
+		}
+		addSet("max_adults", *req.MaxAdults)
+	}
+
+	if req.MaxChildren != nil {
+		if *req.MaxChildren < 0 {
+			return fmt.Errorf("max children cannot be negative")
+		}
+		addSet("max_children", *req.MaxChildren)
+	}
+
+	if req.BasePrice != nil {
+		if *req.BasePrice < 0 {
+			return fmt.Errorf("base price cannot be negative")
+		}
+		addSet("base_price", *req.BasePrice)
+	}
+
+	if req.Amenities != nil {
+		addSet("amenities", req.Amenities)
+	}
+
+	query += fmt.Sprintf(" WHERE id = $%d AND deleted_at IS NULL", argID)
+	args = append(args, id)
+
+	cmd, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("update room type: %w", err)
 	}
 	if cmd.RowsAffected() == 0 {
-		return fmt.Errorf("room type not found")
+		return entity.ErrRecordNotFound
 	}
+
 	return nil
 }
 

@@ -17,7 +17,7 @@ func NewPricingService(priceRepo *repository.PriceRepository) *PricingService {
 	return &PricingService{priceRepo: priceRepo}
 }
 
-func (s *PricingService) CalculateBaseRates(ctx context.Context, roomTypeID string, start, end time.Time) ([]entity.DailyRate, float64, error) {
+func (s *PricingService) CalculateBaseRates(ctx context.Context, roomTypeID string, fallbackPrice float64, start, end time.Time) ([]entity.DailyRate, float64, error) {
 	rules, err := s.priceRepo.ListByRoomType(ctx, roomTypeID)
 	if err != nil {
 		return nil, 0, err
@@ -27,8 +27,8 @@ func (s *PricingService) CalculateBaseRates(ctx context.Context, roomTypeID stri
 	var total float64
 
 	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
+		currentPrice := 0.0
 		priceFound := false
-		var currentPrice float64
 
 		for _, rule := range rules {
 			if (d.Equal(rule.Start) || d.After(rule.Start)) && d.Before(rule.End) {
@@ -39,7 +39,12 @@ func (s *PricingService) CalculateBaseRates(ctx context.Context, roomTypeID stri
 		}
 
 		if !priceFound {
-			return nil, 0, errors.New("no price defined for date: " + d.Format("2006-01-02"))
+			if fallbackPrice > 0 {
+				currentPrice = fallbackPrice
+				priceFound = true
+			} else {
+				return nil, 0, errors.New("no price defined for date: " + d.Format("2006-01-02"))
+			}
 		}
 
 		dailyRates = append(dailyRates, entity.DailyRate{
@@ -60,7 +65,7 @@ func (s *PricingService) ApplyRatePlan(baseTotal float64, plan entity.RatePlan, 
 		finalTotal += mealCost
 	}
 
-	// 2. Future logic: Discounts, Taxes, etc. can be added here centrally.
+	// Future logic: Discounts, Taxes, etc. can be added here centrally.
 
 	return finalTotal
 }

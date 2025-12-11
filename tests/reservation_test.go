@@ -120,6 +120,43 @@ func (s *ReservationSuite) TestReservationWithMealPlan() {
 	s.Equal(planID, *resData.RatePlanID)
 }
 
+func (s *ReservationSuite) TestReservationFallbackPrice() {
+	resR := s.MakeRequest("POST", "/api/v1/room-types", map[string]interface{}{
+		"hotel_id":       s.hotelID, 
+		"name":           "Fallback Room", "code": "FBK", 
+		"total_quantity": 5,
+		"base_price":     120.0,
+		"max_occupancy":  2, "max_adults": 2, "max_children": 0,
+		"amenities":      []string{"wifi"},
+	}, s.token)
+	s.Require().Equal(http.StatusCreated, resR.Code)
+
+	var dataR map[string]string
+	json.Unmarshal(resR.Body.Bytes(), &dataR)
+	roomID := dataR["room_type_id"]
+
+	res := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
+		"room_type_id":     roomID,
+		"guest_email":      "fallback@test.com",
+		"guest_first_name": "Fall", "guest_last_name": "Back",
+		"start":            "2026-05-01", "end": "2026-05-03",
+		"adults":           2, "children": 0,
+	}, "")
+	
+	s.Equal(http.StatusCreated, res.Code, "La reserva debería crearse usando el precio base")
+
+	var dataRes map[string]interface{}
+	json.Unmarshal(res.Body.Bytes(), &dataRes)
+	code := dataRes["reservation_code"].(string)
+
+	resGet := s.MakeRequest("GET", "/api/v1/reservations/"+code, nil, "")
+	
+	var resData entity.Reservation
+	json.Unmarshal(resGet.Body.Bytes(), &resData)
+
+	s.Equal(240.0, resData.TotalPrice)
+}
+
 func TestReservationSuite(t *testing.T) {
 	suite.Run(t, new(ReservationSuite))
 }
