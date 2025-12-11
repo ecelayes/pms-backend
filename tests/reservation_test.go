@@ -157,6 +157,66 @@ func (s *ReservationSuite) TestReservationFallbackPrice() {
 	s.Equal(240.0, resData.TotalPrice)
 }
 
+func (s *ReservationSuite) TestCancellationPenalty() {
+	s.MakeRequest("POST", "/api/v1/pricing/rules", map[string]interface{}{
+		"room_type_id": s.roomTypeID,
+		"start":        "2026-06-01",
+		"end":          "2026-06-10",
+		"price":        100.0,
+		"priority":     0,
+	}, s.token)
+
+	resRP := s.MakeRequest("POST", "/api/v1/rate-plans", map[string]interface{}{
+		"hotel_id":     s.hotelID,
+		"room_type_id": s.roomTypeID,
+		"name":         "Strict 50",
+		"meal_plan":    map[string]interface{}{"included": false},
+		"cancellation_policy": map[string]interface{}{
+			"is_refundable": true,
+			"rules": []map[string]interface{}{
+				{
+					"hours_before_check_in": 10000,
+					"penalty_type":          1,
+					"penalty_value":         50.0,
+				},
+			},
+		},
+		"payment_policy": map[string]interface{}{"timing": 0},
+	}, s.token)
+	s.Require().Equal(http.StatusCreated, resRP.Code)
+	
+	var dataRP map[string]string
+	json.Unmarshal(resRP.Body.Bytes(), &dataRP)
+	planID := dataRP["rate_plan_id"]
+
+	res := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
+		"room_type_id":     s.roomTypeID,
+		"rate_plan_id":     planID,
+		"guest_email":      "penalty@test.com",
+		"guest_first_name": "Pen", "guest_last_name": "Alty",
+		"start":            "2026-06-01", "end": "2026-06-03",
+		"adults":           2, "children": 0,
+	}, "")
+	s.Require().Equal(http.StatusCreated, res.Code, "Response: "+res.Body.String())
+
+	var dataRes map[string]interface{}
+	json.Unmarshal(res.Body.Bytes(), &dataRes)
+	resCode := dataRes["reservation_code"].(string)
+
+	resGet := s.MakeRequest("GET", "/api/v1/reservations/"+resCode, nil, "")
+	var resData entity.Reservation
+	json.Unmarshal(resGet.Body.Bytes(), &resData)
+	resID := resData.ID
+
+	resPreview := s.MakeRequest("GET", "/api/v1/reservations/"+resID+"/cancel-preview", nil, s.token)
+	s.Equal(http.StatusOK, resPreview.Code)
+
+	var previewData map[string]interface{}
+	json.Unmarshal(resPreview.Body.Bytes(), &previewData)
+
+	s.Equal(100.0, previewData["penalty_amount"], "La penalidad debe ser el 50% del total")
+}
+
 func TestReservationSuite(t *testing.T) {
 	suite.Run(t, new(ReservationSuite))
 }

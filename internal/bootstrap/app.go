@@ -94,6 +94,7 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	protected.GET("/services/:id", catalogHandler.GetServiceByID)
 
 	// Reservation Admin
+	protected.GET("/reservations/:id/cancel-preview", resHandler.PreviewCancel)
 	protected.DELETE("/reservations/:id", resHandler.Delete, security.RequireSuperAdmin)
 
 	// Users

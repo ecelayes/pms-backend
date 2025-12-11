@@ -57,6 +57,23 @@ func (h *ReservationHandler) GetByCode(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
+func (h *ReservationHandler) PreviewCancel(c echo.Context) error {
+	id := c.Param("id")
+	
+	penalty, err := h.uc.PreviewCancellation(c.Request().Context(), id)
+	if err != nil {
+		if errors.Is(err, entity.ErrRecordNotFound) {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "reservation not found"})
+		}
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"penalty_amount": penalty,
+		"currency":       "USD",
+	})
+}
+
 func (h *ReservationHandler) Cancel(c echo.Context) error {
 	id := c.Param("id") // TODO: Here it is still by internal UUID for operations, or it could be by code.
 	err := h.uc.Cancel(c.Request().Context(), id)

@@ -233,6 +233,58 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 	return resCode, nil
 }
 
+func (uc *ReservationUseCase) PreviewCancellation(ctx context.Context, reservationID string) (float64, error) {
+	res, err := uc.resRepo.GetByID(ctx, reservationID)
+	if err != nil {
+		return 0, err
+	}
+
+	if res.Status == "cancelled" {
+		return 0, entity.ErrReservationCancelled
+	}
+
+	if res.RatePlanID == nil {
+		return 0, nil
+	}
+
+	plan, err := uc.ratePlanRepo.GetByID(ctx, *res.RatePlanID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to load rate plan policy: %w", err)
+	}
+
+	room, err := uc.roomRepo.GetByID(ctx, res.RoomTypeID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to load room type: %w", err)
+	}
+
+	checkInTime := time.Date(res.Start.Year(), res.Start.Month(), res.Start.Day(), 15, 0, 0, 0, time.UTC)
+	hoursUntil := time.Until(checkInTime).Hours()
+
+	firstNightPrice := 0.0
+	
+	firstNightRates, baseFirstNight, err := uc.pricingService.CalculateBaseRates(
+		ctx, 
+		res.RoomTypeID, 
+		room.BasePrice,
+		res.Start, 
+		res.Start.AddDate(0, 0, 1),
+	)
+	
+	if err == nil && len(firstNightRates) > 0 {
+		totalPax := res.Adults + res.Children
+		firstNightPrice = uc.pricingService.ApplyRatePlan(baseFirstNight, *plan, totalPax, 1)
+	} else {
+		days := int(res.End.Sub(res.Start).Hours() / 24)
+		if days > 0 {
+			firstNightPrice = res.TotalPrice / float64(days)
+		}
+	}
+
+	penalty := plan.CancellationPolicy.CalculatePenaltyAmount(res.TotalPrice, firstNightPrice, hoursUntil)
+
+	return penalty, nil
+}
+
 func (uc *ReservationUseCase) Cancel(ctx context.Context, id string) error {
 	return uc.resRepo.UpdateStatus(ctx, id, "cancelled")
 }

@@ -28,7 +28,7 @@ func (r *ReservationRepository) Create(ctx context.Context, tx pgx.Tx, res entit
 	`
 	_, err := tx.Exec(ctx, query, 
 		res.ID, res.RoomTypeID, res.ReservationCode, res.Start, res.End, res.GuestID, 
-		res.TotalPrice, res.Adults, res.Children, res.RatePlanID, // <--- Pasamos el puntero
+		res.TotalPrice, res.Adults, res.Children, res.RatePlanID,
 	)
 	if err != nil {
 		return fmt.Errorf("insert reservation: %w", err)
@@ -54,8 +54,8 @@ func (r *ReservationRepository) CountOverlapping(ctx context.Context, roomTypeID
 		FROM reservations
 		WHERE room_type_id = $1 
 		  AND status != 'cancelled'
-		  AND start < $3 
-		  AND end > $2
+		  AND lower(stay_range) < $3::date 
+		  AND upper(stay_range) > $2::date
 		  AND deleted_at IS NULL
 	`
 	var count int
@@ -81,6 +81,29 @@ func (r *ReservationRepository) CountActiveByRatePlan(ctx context.Context, rateP
 		return 0, fmt.Errorf("count active reservations by rate plan: %w", err)
 	}
 	return count, nil
+}
+
+func (r *ReservationRepository) GetByID(ctx context.Context, id string) (*entity.Reservation, error) {
+	query := `
+		SELECT id, reservation_code, room_type_id, guest_id, lower(stay_range), upper(stay_range), 
+		       total_price, status, adults, children, rate_plan_id, created_at, updated_at
+		FROM reservations
+		WHERE id = $1 AND deleted_at IS NULL
+	`
+	var res entity.Reservation
+	err := r.db.QueryRow(ctx, query, id).Scan(
+		&res.ID, &res.ReservationCode, &res.RoomTypeID, &res.GuestID, 
+		&res.Start, &res.End, &res.TotalPrice, &res.Status, 
+		&res.Adults, &res.Children, &res.RatePlanID,
+		&res.CreatedAt, &res.UpdatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, entity.ErrRecordNotFound 
+		}
+		return nil, fmt.Errorf("get reservation: %w", err)
+	}
+	return &res, nil
 }
 
 func (r *ReservationRepository) GetByCode(ctx context.Context, code string) (*entity.Reservation, error) {

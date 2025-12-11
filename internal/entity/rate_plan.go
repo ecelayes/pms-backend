@@ -106,3 +106,47 @@ type UpdateRatePlanRequest struct {
 	CancellationPolicy *CancellationPolicy `json:"cancellation_policy"`
 	PaymentPolicy      *PaymentPolicy      `json:"payment_policy"`
 }
+
+func (cp *CancellationPolicy) CalculatePenaltyAmount(totalPrice float64, firstNightPrice float64, hoursUntilCheckIn float64) float64 {
+	if !cp.IsRefundable {
+		return totalPrice
+	}
+
+	if len(cp.Rules) == 0 {
+		return 0.0
+	}
+
+	var activeRule *CancellationRule
+	minHours := 1000000.0
+
+	for _, rule := range cp.Rules {
+		if hoursUntilCheckIn <= float64(rule.HoursBeforeCheckIn) {
+			if float64(rule.HoursBeforeCheckIn) < minHours {
+				minHours = float64(rule.HoursBeforeCheckIn)
+				r := rule
+				activeRule = &r
+			}
+		}
+	}
+
+	if activeRule == nil {
+		return 0.0
+	}
+
+	var penalty float64
+
+	switch activeRule.PenaltyType {
+	case PenaltyFixedAmount:
+		penalty = activeRule.PenaltyValue
+	case PenaltyPercentage:
+		penalty = totalPrice * (activeRule.PenaltyValue / 100.0)
+	case PenaltyNights:
+		penalty = firstNightPrice * activeRule.PenaltyValue
+	}
+
+	if penalty > totalPrice {
+		return totalPrice
+	}
+	
+	return penalty
+}
