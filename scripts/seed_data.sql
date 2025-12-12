@@ -1,6 +1,7 @@
 TRUNCATE 
     reservations, 
     price_rules, 
+    rate_plans,
     room_types, 
     hotels, 
     organization_members, 
@@ -56,7 +57,7 @@ VALUES (
 );
 
 INSERT INTO room_types (
-    id, hotel_id, name, code, total_quantity, 
+    id, hotel_id, name, code, total_quantity, base_price,
     max_occupancy, max_adults, max_children, amenities, 
     created_at, updated_at
 )
@@ -66,6 +67,7 @@ VALUES (
     'Ocean View Suite',
     'OCN',
     10,
+    150.00,
     4,
     2,
     2,
@@ -73,13 +75,30 @@ VALUES (
     NOW(), NOW()
 );
 
-INSERT INTO price_rules (id, room_type_id, validity_range, price, priority, created_at, updated_at)
+INSERT INTO rate_plans (
+    id, hotel_id, room_type_id, name, description,
+    meal_plan, cancellation_policy, payment_policy, active,
+    created_at, updated_at
+)
+VALUES (
+    '018e9a9d-0c8e-7000-0000-000000000009',
+    '018e9a9d-0c8e-7000-0000-000000000004',
+    '018e9a9d-0c8e-7000-0000-000000000005',
+    'Standard Rate',
+    'Flexible cancellation',
+    '{"type": 0, "included": false, "price_per_pax": 0}',
+    '{"is_refundable": true, "rules": []}',
+    '{"timing": 0, "method": 0, "prepay_percent": 0}',
+    true,
+    NOW(), NOW()
+);
+
+INSERT INTO price_rules (id, room_type_id, validity_range, price, created_at, updated_at)
 VALUES (
     '018e9a9d-0c8e-7000-0000-000000000006',
     '018e9a9d-0c8e-7000-0000-000000000005',
     '[2025-01-01, 2025-12-31)',
     250.00,
-    0,
     NOW(), NOW()
 );
 
@@ -94,7 +113,7 @@ VALUES (
 );
 
 INSERT INTO reservations (
-    id, reservation_code, room_type_id, guest_id, 
+    id, reservation_code, room_type_id, rate_plan_id, guest_id, 
     stay_range, total_price, status, adults, children,
     created_at, updated_at
 )
@@ -102,6 +121,7 @@ VALUES (
     '018e9a9d-0c8e-7000-0000-000000000008',
     'MIA-OCN-SEED',
     '018e9a9d-0c8e-7000-0000-000000000005',
+    '018e9a9d-0c8e-7000-0000-000000000009',
     '018e9a9d-0c8e-7000-0000-000000000007',
     '[2025-06-10, 2025-06-15)',
     1250.00,

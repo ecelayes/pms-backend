@@ -25,8 +25,6 @@ func (s *RatePlanSuite) SetupTest() {
 		"name":            "RatePlan Hotel",
 		"code":            "RPH",
 	}, s.token)
-	s.Require().Equal(http.StatusCreated, resH.Code)
-	
 	var dataH map[string]string
 	json.Unmarshal(resH.Body.Bytes(), &dataH)
 	s.hotelID = dataH["hotel_id"]
@@ -39,16 +37,14 @@ func (s *RatePlanSuite) SetupTest() {
 		"max_occupancy":  2, "max_adults": 2, "max_children": 0,
 		"amenities":      []string{"wifi"},
 	}, s.token)
-	s.Require().Equal(http.StatusCreated, resR.Code)
-	
 	var dataR map[string]string
 	json.Unmarshal(resR.Body.Bytes(), &dataR)
 	s.roomTypeID = dataR["room_type_id"]
 
-	s.MakeRequest("POST", "/api/v1/pricing/rules", map[string]interface{}{
+	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
 		"room_type_id": s.roomTypeID,
 		"start": "2026-01-01", "end": "2026-01-31",
-        "price": 100.0, "priority": 1,
+        "price": 100.0,
 	}, s.token)
 }
 

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/ecelayes/pms-backend/internal/entity"
 )
 
 type PricingSuite struct {
@@ -39,12 +40,34 @@ func (s *PricingSuite) SetupTest() {
 	s.roomID = dataR["room_type_id"]
 }
 
-func (s *PricingSuite) TestCRUDPricing() {
-	res := s.MakeRequest("POST", "/api/v1/pricing/rules", map[string]interface{}{
+func (s *PricingSuite) TestBulkPricingLogic() {
+	res := s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
 		"room_type_id": s.roomID,
-		"start": "2025-01-01", "end": "2025-01-10", "price": 100.0, "priority": 0,
+		"start": "2025-01-01", "end": "2025-01-31", 
+		"price": 100.0,
 	}, s.token)
-	s.Equal(http.StatusCreated, res.Code)
+	s.Equal(http.StatusOK, res.Code)
+
+	res2 := s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
+		"room_type_id": s.roomID,
+		"start": "2025-01-10", "end": "2025-01-15", 
+		"price": 200.0,
+	}, s.token)
+	s.Equal(http.StatusOK, res2.Code)
+
+	resGet := s.MakeRequest("GET", "/api/v1/pricing/rules?room_type_id="+s.roomID, nil, s.token)
+	s.Equal(http.StatusOK, resGet.Code)
+
+	var rules []entity.PriceRule
+	json.Unmarshal(resGet.Body.Bytes(), &rules)
+
+	s.Len(rules, 3, "Debería haber cortado la regla base en 3 fragmentos")
+	
+	if len(rules) == 3 {
+		s.Equal(100.0, rules[0].Price, "Fragmento 1 incorrecto")
+		s.Equal(200.0, rules[1].Price, "Fragmento 2 (nuevo) incorrecto")
+		s.Equal(100.0, rules[2].Price, "Fragmento 3 incorrecto")
+	}
 }
 
 func TestPricingSuite(t *testing.T) {

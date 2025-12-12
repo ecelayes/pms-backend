@@ -83,11 +83,12 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 	})
 
 	s.Run("6. Set Pricing (Base Rate)", func() {
-		res := s.MakeRequest("POST", "/api/v1/pricing/rules", map[string]interface{}{
+		res := s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
 			"room_type_id": s.roomID,
-			"start": "2025-10-01", "end": "2025-10-10", "price": 200.0, "priority": 10,
+			"start": "2025-10-01", "end": "2025-10-10", 
+			"price": 200.0,
 		}, s.ownerToken)
-		s.Equal(http.StatusCreated, res.Code)
+		s.Equal(http.StatusOK, res.Code)
 	})
 
 	s.Run("7. Create Rate Plan (Bed & Breakfast)", func() {

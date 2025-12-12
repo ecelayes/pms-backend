@@ -27,11 +27,12 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 
 	// 1.5 Domain Services
 	pricingService := service.NewPricingService(priceRepo)
+	inventoryService := service.NewInventoryService()
 
 	// 2. UseCases
 	availUC := usecase.NewAvailabilityUseCase(roomRepo, resRepo, ratePlanRepo, pricingService)
 	resUC := usecase.NewReservationUseCase(pool, roomRepo, resRepo, guestRepo, ratePlanRepo, pricingService)
-	pricingUC := usecase.NewPricingUseCase(priceRepo, roomRepo)
+	pricingUC := usecase.NewPricingUseCase(pool, priceRepo, roomRepo, inventoryService)
 	authUC := usecase.NewAuthUseCase(pool, userRepo)
 	orgUC := usecase.NewOrganizationUseCase(orgRepo)
 	userUC := usecase.NewUserUseCase(pool, userRepo, orgRepo)
@@ -119,9 +120,8 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	protected.DELETE("/room-types/:id", roomHandler.Delete)
 
 	// Pricing CRUD
-	protected.POST("/pricing/rules", pricingHandler.CreateRule)
+	protected.POST("/pricing/bulk", pricingHandler.BulkUpdate)
 	protected.GET("/pricing/rules", pricingHandler.GetRules)
-	protected.PUT("/pricing/rules/:id", pricingHandler.UpdateRule)
 	protected.DELETE("/pricing/rules/:id", pricingHandler.DeleteRule)
 
 	// Rate Plans CRUD
