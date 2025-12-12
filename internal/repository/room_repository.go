@@ -92,6 +92,30 @@ func (r *RoomRepository) GetByID(ctx context.Context, id string) (*entity.RoomTy
 	return &rt, nil
 }
 
+func (r *RoomRepository) GetByIDLocked(ctx context.Context, tx pgx.Tx, id string) (*entity.RoomType, error) {
+	query := `
+		SELECT id, hotel_id, name, code, total_quantity, base_price,
+		       max_occupancy, max_adults, max_children, amenities, 
+		       created_at, updated_at
+		FROM room_types
+		WHERE id = $1 AND deleted_at IS NULL
+		FOR UPDATE -- <--- LA CLAVE MÁGICA
+	`
+	var rt entity.RoomType
+	err := tx.QueryRow(ctx, query, id).Scan(
+		&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity, &rt.BasePrice,
+		&rt.MaxOccupancy, &rt.MaxAdults, &rt.MaxChildren, &rt.Amenities,
+		&rt.CreatedAt, &rt.UpdatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, entity.ErrRecordNotFound
+		}
+		return nil, fmt.Errorf("get room type locked: %w", err)
+	}
+	return &rt, nil
+}
+
 func (r *RoomRepository) ListByHotel(ctx context.Context, hotelID string) ([]entity.RoomType, error) {
 	query := `
 		SELECT id, hotel_id, name, code, total_quantity, base_price,

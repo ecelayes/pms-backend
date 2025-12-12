@@ -1,8 +1,10 @@
 package tests
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -26,6 +28,8 @@ func (s *ReservationSuite) SetupTest() {
 		"name":            "Res Hotel",
 		"code":            "RHO",
 	}, s.token)
+	s.Require().Equal(http.StatusCreated, resH.Code)
+
 	var dataH map[string]string
 	json.Unmarshal(resH.Body.Bytes(), &dataH)
 	s.hotelID = dataH["hotel_id"]
@@ -34,9 +38,12 @@ func (s *ReservationSuite) SetupTest() {
 		"hotel_id":       s.hotelID, 
 		"name":           "Std", "code": "STD", 
 		"total_quantity": 5,
+		"base_price":     100.0,
 		"max_occupancy":  4, "max_adults": 2, "max_children": 2,
 		"amenities":      []string{"wifi"},
 	}, s.token)
+	s.Require().Equal(http.StatusCreated, resR.Code)
+
 	var dataR map[string]string
 	json.Unmarshal(resR.Body.Bytes(), &dataR)
 	s.roomTypeID = dataR["room_type_id"]
@@ -65,7 +72,11 @@ func (s *ReservationSuite) TestReservationCRUD() {
 
 	resGet := s.MakeRequest("GET", "/api/v1/reservations/"+code, nil, "")
 	s.Equal(http.StatusOK, resGet.Code)
-	s.Contains(resGet.Body.String(), `"status":"confirmed"`)
+	
+	bodyString := resGet.Body.String()
+	s.Contains(bodyString, `"guest_id"`)
+	s.Contains(bodyString, `"status":"confirmed"`)
+	s.Contains(bodyString, code)
 }
 
 func (s *ReservationSuite) TestReservationWithMealPlan() {
@@ -78,7 +89,7 @@ func (s *ReservationSuite) TestReservationWithMealPlan() {
 			"price_per_pax": 20.0,
 			"type":          1, 
 		},
-		"cancellation_policy": map[string]interface{}{"is_refundable": true},
+		"cancellation_policy": map[string]interface{}{"is_refundable": true, "rules": []interface{}{}},
 		"payment_policy":      map[string]interface{}{"timing": 0},
 	}, s.token)
 	s.Require().Equal(http.StatusCreated, resRP.Code)
@@ -95,6 +106,7 @@ func (s *ReservationSuite) TestReservationWithMealPlan() {
 		"start":            "2025-01-01", "end": "2025-01-04",
 		"adults":           2, "children": 0,
 	}, "")
+	
 	s.Require().Equal(http.StatusCreated, res.Code)
 
 	var dataRes map[string]interface{}
@@ -107,7 +119,9 @@ func (s *ReservationSuite) TestReservationWithMealPlan() {
 	var resData entity.Reservation
 	json.Unmarshal(resGet.Body.Bytes(), &resData)
 	
-	s.Equal(420.0, resData.TotalPrice)
+	s.Equal(420.0, resData.TotalPrice, "El precio total debe incluir el recargo de desayuno")
+	s.NotNil(resData.RatePlanID)
+	s.Equal(planID, *resData.RatePlanID)
 }
 
 func (s *ReservationSuite) TestReservationFallbackPrice() {
@@ -132,15 +146,18 @@ func (s *ReservationSuite) TestReservationFallbackPrice() {
 		"start":            "2026-05-01", "end": "2026-05-03",
 		"adults":           2, "children": 0,
 	}, "")
-	s.Equal(http.StatusCreated, res.Code)
+	
+	s.Equal(http.StatusCreated, res.Code, "La reserva debería crearse usando el precio base")
 
 	var dataRes map[string]interface{}
 	json.Unmarshal(res.Body.Bytes(), &dataRes)
 	code := dataRes["reservation_code"].(string)
 
 	resGet := s.MakeRequest("GET", "/api/v1/reservations/"+code, nil, "")
+	
 	var resData entity.Reservation
 	json.Unmarshal(resGet.Body.Bytes(), &resData)
+
 	s.Equal(240.0, resData.TotalPrice)
 }
 
@@ -199,7 +216,77 @@ func (s *ReservationSuite) TestCancellationPenalty() {
 
 	var previewData map[string]interface{}
 	json.Unmarshal(resPreview.Body.Bytes(), &previewData)
+
 	s.Equal(100.0, previewData["penalty_amount"])
+}
+
+func (s *ReservationSuite) TestConcurrencyOverbooking() {
+	resR := s.MakeRequest("POST", "/api/v1/room-types", map[string]interface{}{
+		"hotel_id":       s.hotelID,
+		"name":           "Single Room", "code": "SGL",
+		"total_quantity": 1,
+		"base_price":     100.0,
+		"max_occupancy":  2, "max_adults": 2, "max_children": 0,
+		"amenities":      []string{"wifi"},
+	}, s.token)
+	s.Require().Equal(http.StatusCreated, resR.Code)
+
+	var dataR map[string]string
+	json.Unmarshal(resR.Body.Bytes(), &dataR)
+	targetRoomID := dataR["room_type_id"]
+
+	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
+		"room_type_id": targetRoomID,
+		"start": "2026-12-01", "end": "2026-12-05", 
+		"price": 100.0,
+	}, s.token)
+
+	
+	guestEmail := "concurrent@test.com"
+	_, err := s.db.Exec(context.Background(), `
+		INSERT INTO guests (email, first_name, last_name, phone, created_at, updated_at) 
+		VALUES ($1, 'Pre', 'Created', '555-5555', NOW(), NOW())
+	`, guestEmail)
+	s.Require().NoError(err)
+
+	concurrentReqs := 10
+	var wg sync.WaitGroup
+	wg.Add(concurrentReqs)
+
+	successCount := 0
+	failCount := 0
+	var mu sync.Mutex
+
+	for i := 0; i < concurrentReqs; i++ {
+		go func(idx int) {
+			defer wg.Done()
+			
+			payload := map[string]interface{}{
+				"room_type_id":     targetRoomID,
+				"guest_email":      guestEmail,
+				"guest_first_name": "Race", "guest_last_name": "Condition",
+				"start":            "2026-12-01", "end": "2026-12-02",
+				"adults":           1, "children": 0,
+			}
+
+			res := s.MakeRequest("POST", "/api/v1/reservations", payload, "")
+			
+			mu.Lock()
+			if res.Code == http.StatusCreated {
+				successCount++
+			} else if res.Code == http.StatusConflict {
+				failCount++
+			} else {
+				s.T().Logf("Unexpected status: %d, body: %s", res.Code, res.Body.String())
+			}
+			mu.Unlock()
+		}(i)
+	}
+
+	wg.Wait()
+
+	s.Equal(1, successCount, "Only one reservation should be successful.")
+	s.Equal(concurrentReqs-1, failCount, "The rest should fail due to overbooking (409)")
 }
 
 func TestReservationSuite(t *testing.T) {

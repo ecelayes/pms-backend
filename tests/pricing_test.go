@@ -61,13 +61,34 @@ func (s *PricingSuite) TestBulkPricingLogic() {
 	var rules []entity.PriceRule
 	json.Unmarshal(resGet.Body.Bytes(), &rules)
 
-	s.Len(rules, 3, "Debería haber cortado la regla base en 3 fragmentos")
+	s.Len(rules, 3, "I should have cut the base ruler into three pieces.")
 	
 	if len(rules) == 3 {
-		s.Equal(100.0, rules[0].Price, "Fragmento 1 incorrecto")
-		s.Equal(200.0, rules[1].Price, "Fragmento 2 (nuevo) incorrecto")
-		s.Equal(100.0, rules[2].Price, "Fragmento 3 incorrecto")
+		s.Equal(100.0, rules[0].Price, "Fragment 1 incorrect")
+		s.Equal(200.0, rules[1].Price, "Fragment 2 incorrect")
+		s.Equal(100.0, rules[2].Price, "Fragment 3 incorrect")
 	}
+}
+
+func (s *PricingSuite) TestDeletePriceRule() {
+	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
+		"room_type_id": s.roomID,
+		"start": "2025-02-01", "end": "2025-02-10", 
+		"price": 150.0,
+	}, s.token)
+
+	resGet := s.MakeRequest("GET", "/api/v1/pricing/rules?room_type_id="+s.roomID, nil, s.token)
+	var rules []entity.PriceRule
+	json.Unmarshal(resGet.Body.Bytes(), &rules)
+	ruleID := rules[0].ID
+
+	resDel := s.MakeRequest("DELETE", "/api/v1/pricing/rules/"+ruleID, nil, s.token)
+	s.Equal(http.StatusOK, resDel.Code)
+
+	resGet2 := s.MakeRequest("GET", "/api/v1/pricing/rules?room_type_id="+s.roomID, nil, s.token)
+	var rules2 []entity.PriceRule
+	json.Unmarshal(resGet2.Body.Bytes(), &rules2)
+	s.Len(rules2, 0, "The rule should have been deleted.")
 }
 
 func TestPricingSuite(t *testing.T) {

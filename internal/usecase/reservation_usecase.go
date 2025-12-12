@@ -15,11 +15,11 @@ import (
 )
 
 type ReservationUseCase struct {
-	db       *pgxpool.Pool
-	roomRepo *repository.RoomRepository
-	resRepo  *repository.ReservationRepository
-	guestRepo *repository.GuestRepository
-	ratePlanRepo *repository.RatePlanRepository
+	db             *pgxpool.Pool
+	roomRepo       *repository.RoomRepository
+	resRepo        *repository.ReservationRepository
+	guestRepo      *repository.GuestRepository
+	ratePlanRepo   *repository.RatePlanRepository
 	pricingService *service.PricingService
 }
 
@@ -88,11 +88,11 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 	resCode := fmt.Sprintf("%s-%s-%s", hotelCode, roomCode, utils.GenerateRandomCode(4))
 
 	dailyRates, baseTotal, err := uc.pricingService.CalculateBaseRates(
-    ctx,
-    req.RoomTypeID,
-    roomType.BasePrice,
-    start,
-    end,
+		ctx,
+		req.RoomTypeID,
+		roomType.BasePrice,
+		start,
+		end,
 	)
 	if err != nil {
 		return "", entity.ErrNoAvailability 
@@ -140,18 +140,11 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 
 	if guest != nil {
 		guestID = guest.ID
-
 		needsUpdate := false
 		
-		if req.GuestFirstName != "" && req.GuestFirstName != guest.FirstName {
-			needsUpdate = true
-		}
-		if req.GuestLastName != "" && req.GuestLastName != guest.LastName {
-			needsUpdate = true
-		}
-		if req.GuestPhone != "" && req.GuestPhone != guest.Phone {
-			needsUpdate = true
-		}
+		if req.GuestFirstName != "" && req.GuestFirstName != guest.FirstName { needsUpdate = true }
+		if req.GuestLastName != "" && req.GuestLastName != guest.LastName { needsUpdate = true }
+		if req.GuestPhone != "" && req.GuestPhone != guest.Phone { needsUpdate = true }
 
 		if needsUpdate {
 			updatedGuest := entity.Guest{
@@ -164,21 +157,16 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 				return "", err
 			}
 		}
-
 	} else {
 		if req.GuestFirstName == "" || req.GuestLastName == "" {
 			return "", errors.New("guest name is required for new registration")
 		}
 
 		newID, err := uuid.NewV7()
-		if err != nil {
-			return "", fmt.Errorf("failed to generate uuid v7: %w", err)
-		}
+		if err != nil { return "", fmt.Errorf("failed to generate uuid v7: %w", err) }
 		
 		newGuest := entity.Guest{
-			BaseEntity: entity.BaseEntity{
-				ID: newID.String(),
-			},
+			BaseEntity: entity.BaseEntity{ ID: newID.String() },
 			Email:     req.GuestEmail,
 			FirstName: req.GuestFirstName,
 			LastName:  req.GuestLastName,
@@ -186,9 +174,12 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 		}
 		
 		guestID, err = uc.guestRepo.Create(ctx, tx, newGuest)
-		if err != nil {
-			return "", err
-		}
+		if err != nil { return "", err }
+	}
+	
+	lockedRoom, err := uc.roomRepo.GetByIDLocked(ctx, tx, req.RoomTypeID)
+	if err != nil {
+		return "", fmt.Errorf("failed to lock room inventory: %w", err)
 	}
 
 	reservedCount, err := uc.roomRepo.CountReservations(ctx, tx, req.RoomTypeID, start, end)
@@ -196,7 +187,7 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 		return "", err
 	}
 
-	if (roomType.TotalQuantity - reservedCount) <= 0 {
+	if (lockedRoom.TotalQuantity - reservedCount) < 1 {
 		return "", entity.ErrNoAvailability
 	}
 
