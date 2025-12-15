@@ -32,6 +32,10 @@ func Auth(provider SaltProvider) echo.MiddlewareFunc {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "malformed token"})
 			}
 
+			if claims.Purpose != auth.PurposeAuth {
+				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token purpose"})
+			}
+
 			userSalt, err := provider.GetUserSalt(c.Request().Context(), claims.UserID)
 			if err != nil {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "user not found or inactive"})

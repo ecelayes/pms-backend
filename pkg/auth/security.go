@@ -10,9 +10,15 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const (
+	PurposeAuth  = "auth"
+	PurposeReset = "reset"
+)
+
 type Claims struct {
-	UserID string `json:"user_id"`
-	Role   string `json:"role"`
+	UserID  string `json:"user_id"`
+	Role    string `json:"role"`
+	Purpose string `json:"purpose"`
 	jwt.RegisteredClaims
 }
 
@@ -36,10 +42,25 @@ func CheckPassword(passwordRaw, passwordHash string) bool {
 
 func GenerateToken(userID, role, userSalt string) (string, error) {
 	claims := Claims{
-		UserID: userID,
-		Role:   role,
+		UserID:  userID,
+		Role:    role,
+		Purpose: PurposeAuth,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(userSalt))
+}
+
+func GenerateResetToken(userID, userSalt string) (string, error) {
+	claims := Claims{
+		UserID:  userID,
+		Role:    "none",
+		Purpose: PurposeReset,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}

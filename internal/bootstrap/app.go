@@ -5,6 +5,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
+	"github.com/ecelayes/pms-backend/pkg/logger"
 	"github.com/ecelayes/pms-backend/internal/handler"
 	"github.com/ecelayes/pms-backend/internal/repository"
 	"github.com/ecelayes/pms-backend/internal/security"
@@ -13,6 +14,13 @@ import (
 )
 
 func NewApp(pool *pgxpool.Pool) *echo.Echo {
+	// 0. Logger
+	log, err := logger.New()
+	if err != nil {
+		panic(err)
+	}
+	defer log.Sync()
+
 	// 1. Repositories
 	roomRepo := repository.NewRoomRepository(pool)
 	resRepo := repository.NewReservationRepository(pool)
@@ -28,12 +36,13 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	// 1.5 Domain Services
 	pricingService := service.NewPricingService(priceRepo)
 	inventoryService := service.NewInventoryService()
+	emailService := service.NewEmailService()
 
 	// 2. UseCases
 	availUC := usecase.NewAvailabilityUseCase(roomRepo, resRepo, ratePlanRepo, pricingService)
 	resUC := usecase.NewReservationUseCase(pool, roomRepo, resRepo, guestRepo, ratePlanRepo, pricingService)
 	pricingUC := usecase.NewPricingUseCase(pool, priceRepo, roomRepo, inventoryService)
-	authUC := usecase.NewAuthUseCase(pool, userRepo)
+	authUC := usecase.NewAuthUseCase(pool, userRepo, emailService, log)
 	orgUC := usecase.NewOrganizationUseCase(orgRepo)
 	userUC := usecase.NewUserUseCase(pool, userRepo, orgRepo)
 	hotelUC := usecase.NewHotelUseCase(hotelRepo)
@@ -59,11 +68,20 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Set("logger", log)
+			return next(c)
+		}
+	})
+
 	// 5. Routs
 	v1 := e.Group("/api/v1")
 
 	// Public
 	v1.POST("/auth/login", authHandler.Login)
+	v1.POST("/auth/forgot-password", authHandler.ForgotPassword)
+	v1.POST("/auth/reset-password", authHandler.ResetPassword)
 	v1.GET("/availability", availHandler.Get)
 	v1.POST("/reservations", resHandler.Create)
 	v1.GET("/reservations/:code", resHandler.GetByCode)

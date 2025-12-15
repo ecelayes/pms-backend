@@ -24,6 +24,9 @@ func (s *UserSuite) TestUserHierarchy() {
 		"email":           "manager@corp.com",
 		"password":        "secret123",
 		"role":            "manager",
+		"first_name":      "Manager",
+    "last_name":       "One",
+    "phone":           "987654",
 	}, s.ownerToken)
 	s.Equal(http.StatusCreated, res.Code)
 
@@ -32,6 +35,9 @@ func (s *UserSuite) TestUserHierarchy() {
 		"email":           "another_owner@corp.com",
 		"password":        "secret123",
 		"role":            "owner",
+		"first_name":      "Owner",
+    "last_name":       "Two",
+    "phone":           "987654",
 	}, s.ownerToken)
 	
 	s.Equal(http.StatusForbidden, resFail.Code)

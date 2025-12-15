@@ -32,6 +32,9 @@ func (uc *UserUseCase) CreateUser(ctx context.Context, requesterRole string, req
 	if req.OrganizationID == "" {
 		return "", errors.New("organization_id is required")
 	}
+	if req.FirstName == "" || req.LastName == "" {
+		return "", errors.New("first_name and last_name are required")
+	}
 
 	switch req.Role {
 	case entity.OrgRoleOwner:
@@ -64,7 +67,18 @@ func (uc *UserUseCase) CreateUser(ctx context.Context, requesterRole string, req
 	if err != nil { return "", err }
 	defer tx.Rollback(ctx)
 
-	err = uc.userRepo.Create(ctx, tx, userID.String(), req.Email, passwordHash, userSalt, entity.RoleUser)
+	newUser := entity.User{
+		BaseEntity: entity.BaseEntity{ID: userID.String()},
+		Email:      req.Email,
+		Password:   passwordHash,
+		Salt:       userSalt,
+		Role:       entity.RoleUser,
+		FirstName:  req.FirstName,
+		LastName:   req.LastName,
+		Phone:      req.Phone,
+	}
+
+	err = uc.userRepo.Create(ctx, tx, newUser)
 	if err != nil { return "", err }
 
 	member := entity.OrganizationMember{

@@ -38,6 +38,9 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 			"email":           "ceo@global.com",
 			"password":        "pass",
 			"role":            "owner",
+			"first_name":      "The",
+			"last_name":       "CEO",
+			"phone":           "111-2222",
 		}, s.superToken)
 		s.Equal(http.StatusCreated, res.Code)
 	})
