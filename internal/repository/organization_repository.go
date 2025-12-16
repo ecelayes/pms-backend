@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -116,4 +117,17 @@ func (r *OrganizationRepository) AddMember(ctx context.Context, tx pgx.Tx, membe
 		return fmt.Errorf("add member: %w", err)
 	}
 	return nil
+}
+
+func (r *OrganizationRepository) GetUserOrganization(ctx context.Context, userID string) (string, error) {
+	var orgID string
+	query := `SELECT organization_id FROM organization_members WHERE user_id = $1 LIMIT 1`
+	err := r.db.QueryRow(ctx, query, userID).Scan(&orgID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", nil 
+		}
+		return "", fmt.Errorf("fetch user org: %w", err)
+	}
+	return orgID, nil
 }

@@ -15,6 +15,7 @@ import (
 type AuthUseCase struct {
 	db           *pgxpool.Pool
 	userRepo     *repository.UserRepository
+	orgRepo      *repository.OrganizationRepository
 	emailService *service.EmailService
 	logger       *zap.Logger
 }
@@ -22,12 +23,14 @@ type AuthUseCase struct {
 func NewAuthUseCase(
 	db *pgxpool.Pool, 
 	userRepo *repository.UserRepository, 
+	orgRepo *repository.OrganizationRepository,
 	emailService *service.EmailService,
 	logger *zap.Logger,
 ) *AuthUseCase {
 	return &AuthUseCase{
 		db:           db,
 		userRepo:     userRepo,
+		orgRepo:      orgRepo,
 		emailService: emailService,
 		logger:       logger,
 	}
@@ -43,7 +46,12 @@ func (uc *AuthUseCase) Login(ctx context.Context, req entity.AuthRequest) (strin
 		return "", entity.ErrInvalidCredentials
 	}
 
-	return auth.GenerateToken(user.ID, user.Role, user.Salt)
+	orgID, err := uc.orgRepo.GetUserOrganization(ctx, user.ID)
+	if err != nil {
+		return "", err
+	}
+
+	return auth.GenerateToken(user.ID, orgID, user.Role, user.Salt)
 }
 
 func (uc *AuthUseCase) GetUserSalt(ctx context.Context, userID string) (string, error) {

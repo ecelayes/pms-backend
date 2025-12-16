@@ -16,9 +16,10 @@ const (
 )
 
 type Claims struct {
-	UserID  string `json:"user_id"`
-	Role    string `json:"role"`
-	Purpose string `json:"purpose"`
+	UserID         string `json:"user_id"`
+	OrganizationID string `json:"organization_id"`
+	Role           string `json:"role"`
+	Purpose        string `json:"purpose"`
 	jwt.RegisteredClaims
 }
 
@@ -40,11 +41,12 @@ func CheckPassword(passwordRaw, passwordHash string) bool {
 	return err == nil
 }
 
-func GenerateToken(userID, role, userSalt string) (string, error) {
+func GenerateToken(userID, organizationID, role, userSalt string) (string, error) {
 	claims := Claims{
-		UserID:  userID,
-		Role:    role,
-		Purpose: PurposeAuth,
+		UserID:         userID,
+		OrganizationID: organizationID,
+		Role:           role,
+		Purpose:        PurposeAuth,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

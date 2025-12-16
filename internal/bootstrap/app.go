@@ -42,7 +42,7 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	availUC := usecase.NewAvailabilityUseCase(roomRepo, resRepo, ratePlanRepo, pricingService)
 	resUC := usecase.NewReservationUseCase(pool, roomRepo, resRepo, guestRepo, ratePlanRepo, pricingService)
 	pricingUC := usecase.NewPricingUseCase(pool, priceRepo, roomRepo, inventoryService)
-	authUC := usecase.NewAuthUseCase(pool, userRepo, emailService, log)
+	authUC := usecase.NewAuthUseCase(pool, userRepo, orgRepo, emailService, log)
 	orgUC := usecase.NewOrganizationUseCase(orgRepo)
 	userUC := usecase.NewUserUseCase(pool, userRepo, orgRepo)
 	hotelUC := usecase.NewHotelUseCase(hotelRepo)

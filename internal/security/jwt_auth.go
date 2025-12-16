@@ -47,6 +47,7 @@ func Auth(provider SaltProvider) echo.MiddlewareFunc {
 			}
 
 			c.Set("user_id", validClaims.UserID)
+			c.Set("organization_id", validClaims.OrganizationID)
 			c.Set("role", validClaims.Role)
 
 			return next(c)

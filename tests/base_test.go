@@ -89,6 +89,10 @@ func (s *BaseSuite) GetSuperAdminToken() string {
 	_, err := s.db.Exec(ctx, `INSERT INTO users (id, email, password, salt, role, created_at, updated_at) VALUES ($1, $2, $3, $4, 'super_admin', NOW(), NOW())`, userID.String(), email, hash, salt)
 	if err != nil { s.T().Fatal(err) }
 
+	orgID, _ := uuid.NewV7()
+	s.db.Exec(ctx, `INSERT INTO organizations (id, name, code, created_at, updated_at) VALUES ($1, 'Super Corp', 'SUPER', NOW(), NOW())`, orgID.String())
+	s.db.Exec(ctx, `INSERT INTO organization_members (id, organization_id, user_id, role, created_at, updated_at) VALUES ($1, $2, $3, 'super_admin', NOW(), NOW())`, uuid.NewString(), orgID.String(), userID.String())
+
 	res := s.MakeRequest("POST", "/api/v1/auth/login", map[string]string{"email": email, "password": pass}, "")
 	var data map[string]string
 	json.Unmarshal(res.Body.Bytes(), &data)

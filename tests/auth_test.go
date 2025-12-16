@@ -54,6 +54,13 @@ func (s *AuthSuite) TestPasswordResetFlow() {
 	_, err := s.db.Exec(ctx, `INSERT INTO users (id, email, password, salt, role, first_name, last_name, phone, created_at, updated_at) VALUES ($1, $2, $3, $4, 'user', 'Test', 'User', '12345', NOW(), NOW())`, userID.String(), email, hash, salt)
 	s.Require().NoError(err)
 
+	orgID, _ := uuid.NewV7()
+	_, err = s.db.Exec(ctx, `INSERT INTO organizations (id, name, code, created_at, updated_at) VALUES ($1, 'Reset Corp', 'RESET', NOW(), NOW())`, orgID.String())
+	s.Require().NoError(err)
+
+	_, err = s.db.Exec(ctx, `INSERT INTO organization_members (id, organization_id, user_id, role, created_at, updated_at) VALUES ($1, $2, $3, 'staff', NOW(), NOW())`, uuid.NewString(), orgID.String(), userID.String())
+	s.Require().NoError(err)
+
 	resReq := s.MakeRequest("POST", "/api/v1/auth/forgot-password", map[string]string{"email": email}, "")
 	s.Equal(http.StatusOK, resReq.Code)
 

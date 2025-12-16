@@ -44,6 +44,15 @@ VALUES (
 
 INSERT INTO organization_members (id, organization_id, user_id, role, created_at, updated_at)
 VALUES (
+    '00000000-0000-0000-0000-000000000001',
+    '018e9a9d-0c8e-7000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000000',
+    'super_admin',
+    NOW(), NOW()
+);
+
+INSERT INTO organization_members (id, organization_id, user_id, role, created_at, updated_at)
+VALUES (
     '018e9a9d-0c8e-7000-0000-000000000003',
     '018e9a9d-0c8e-7000-0000-000000000001',
     '018e9a9d-0c8e-7000-0000-000000000002',
