@@ -2,10 +2,12 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ecelayes/pms-backend/internal/entity"
 )
@@ -31,6 +33,10 @@ func (r *ReservationRepository) Create(ctx context.Context, tx pgx.Tx, res entit
 		res.TotalPrice, res.Adults, res.Children, res.RatePlanID,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return entity.ErrConflict
+		}
 		return fmt.Errorf("insert reservation: %w", err)
 	}
 	return nil

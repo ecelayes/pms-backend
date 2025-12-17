@@ -36,7 +36,7 @@ func (h *UserHandler) Create(c echo.Context) error {
 		if errors.Is(err, entity.ErrConflict) {
 			return c.JSON(http.StatusConflict, map[string]string{"error": err.Error()})
 		}
-		if err.Error() == "only super_admin can create organization owners" {
+		if errors.Is(err, entity.ErrInsufficientPermissions) {
 			return c.JSON(http.StatusForbidden, map[string]string{"error": err.Error()})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})

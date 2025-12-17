@@ -101,7 +101,7 @@ func (uc *RatePlanUseCase) Delete(ctx context.Context, id string) error {
 	}
 
 	if count > 0 {
-		return fmt.Errorf("cannot delete rate plan: %d active reservations depend on it", count)
+		return fmt.Errorf("cannot delete rate plan: %d active reservations depend on it: %w", count, entity.ErrConflict)
 	}
 
 	return uc.repo.Delete(ctx, id)

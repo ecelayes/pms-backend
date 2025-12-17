@@ -37,7 +37,7 @@ func (r *UserRepository) Create(ctx context.Context, tx pgx.Tx, u entity.User) e
 
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return entity.ErrConflict
 		}
 		return fmt.Errorf("create user: %w", err)

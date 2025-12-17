@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -36,7 +37,7 @@ func NewPricingUseCase(
 func (uc *PricingUseCase) BulkCreateRule(ctx context.Context, req entity.SetPriceRequest) error {
 	if _, err := uc.roomRepo.GetByID(ctx, req.RoomTypeID); err != nil {
 		if errors.Is(err, entity.ErrRecordNotFound) {
-			return errors.New("room type not found")
+			return entity.ErrRoomTypeNotFound
 		}
 		return err
 	}
@@ -105,5 +106,5 @@ func (uc *PricingUseCase) GetRules(ctx context.Context, roomTypeID, hotelID stri
 	if hotelID != "" {
 		return uc.priceRepo.ListByHotel(ctx, hotelID, pagination)
 	}
-	return nil, 0, errors.New("room_type_id or hotel_id is required")
+	return nil, 0, fmt.Errorf("%w: room_type_id or hotel_id is required", entity.ErrInvalidInput)
 }

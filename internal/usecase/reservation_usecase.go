@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -111,10 +110,10 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 		}
 		
 		if rp.RoomTypeID != nil && *rp.RoomTypeID != req.RoomTypeID {
-			return "", errors.New("rate plan not applicable to this room type")
+			return "", fmt.Errorf("%w: rate plan not applicable to this room type", entity.ErrInvalidInput)
 		}
 		if !rp.Active {
-			return "", errors.New("rate plan is not active")
+			return "", fmt.Errorf("%w: rate plan is not active", entity.ErrInvalidInput)
 		}
 
 		totalPax := req.Adults + req.Children
@@ -128,7 +127,7 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 	defer tx.Rollback(ctx)
 
 	if req.GuestEmail == "" {
-		return "", errors.New("guest email is required")
+		return "", fmt.Errorf("%w: guest email is required", entity.ErrInvalidInput)
 	}
 
 	guest, err := uc.guestRepo.GetByEmail(ctx, req.GuestEmail)
@@ -159,7 +158,7 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 		}
 	} else {
 		if req.GuestFirstName == "" || req.GuestLastName == "" {
-			return "", errors.New("guest name is required for new registration")
+			return "", fmt.Errorf("%w: guest name is required for new registration", entity.ErrInvalidInput)
 		}
 
 		newID, err := uuid.NewV7()

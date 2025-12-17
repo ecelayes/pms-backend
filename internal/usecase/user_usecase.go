@@ -2,7 +2,7 @@ package usecase
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -43,12 +43,12 @@ func (uc *UserUseCase) CreateUser(ctx context.Context, requesterRole string, req
 	switch req.Role {
 	case entity.OrgRoleOwner:
 		if requesterRole != entity.RoleSuperAdmin {
-			return "", errors.New("only super_admin can create organization owners")
+			return "", fmt.Errorf("%w: only super_admin can create organization owners", entity.ErrInsufficientPermissions)
 		}
 	
 	case entity.OrgRoleManager, entity.OrgRoleStaff:
 		if requesterRole != entity.RoleSuperAdmin && requesterRole != entity.OrgRoleOwner {
-			return "", errors.New("insufficient permissions to create staff")
+			return "", fmt.Errorf("%w: insufficient permissions to create staff", entity.ErrInsufficientPermissions)
 		}
 	
 	default:

@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ecelayes/pms-backend/internal/entity"
 )
@@ -31,6 +32,10 @@ func (r *OrganizationRepository) Create(ctx context.Context, tx pgx.Tx, org enti
 	}
 	
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return entity.ErrConflict
+		}
 		return fmt.Errorf("create org: %w", err)
 	}
 	return nil
@@ -136,6 +141,10 @@ func (r *OrganizationRepository) AddMember(ctx context.Context, tx pgx.Tx, membe
 	}
 	
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return entity.ErrConflict
+		}
 		return fmt.Errorf("add member: %w", err)
 	}
 	return nil
