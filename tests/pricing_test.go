@@ -11,9 +11,10 @@ import (
 
 type PricingSuite struct {
 	BaseSuite
-	token  string
-	orgID  string
-	roomID string
+	token   string
+	orgID   string
+	hotelID string
+	roomID  string
 }
 
 func (s *PricingSuite) SetupTest() {
@@ -26,9 +27,10 @@ func (s *PricingSuite) SetupTest() {
 	}, s.token)
 	var dataH map[string]string
 	json.Unmarshal(resH.Body.Bytes(), &dataH)
+	s.hotelID = dataH["hotel_id"]
 	
 	resR := s.MakeRequest("POST", "/api/v1/room-types", map[string]interface{}{
-		"hotel_id":       dataH["hotel_id"], 
+		"hotel_id":       s.hotelID, 
 		"name":           "R", "code": "RRR", 
 		"total_quantity": 5,
 		"max_occupancy":  2, "max_adults": 2, "max_children": 0,
@@ -67,6 +69,25 @@ func (s *PricingSuite) TestBulkPricingLogic() {
 		s.Equal(100.0, rules[0].Price, "Fragment 1 incorrect")
 		s.Equal(200.0, rules[1].Price, "Fragment 2 incorrect")
 		s.Equal(100.0, rules[2].Price, "Fragment 3 incorrect")
+	}
+}
+
+func (s *PricingSuite) TestListByHotel() {
+	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
+		"room_type_id": s.roomID,
+		"start": "2025-03-01", "end": "2025-03-05", 
+		"price": 50.0,
+	}, s.token)
+
+	resGet := s.MakeRequest("GET", "/api/v1/pricing/rules?hotel_id="+s.hotelID, nil, s.token)
+	s.Equal(http.StatusOK, resGet.Code)
+	
+	var rules []entity.PriceRule
+	json.Unmarshal(resGet.Body.Bytes(), &rules)
+	s.Len(rules, 1)
+	if len(rules) > 0 {
+		s.Equal(50.0, rules[0].Price)
+		s.Equal(s.roomID, rules[0].RoomTypeID)
 	}
 }
 

@@ -92,9 +92,12 @@ func (uc *PricingUseCase) DeleteRule(ctx context.Context, id string) error {
 	return uc.priceRepo.Delete(ctx, id)
 }
 
-func (uc *PricingUseCase) GetRules(ctx context.Context, roomTypeID string) ([]entity.PriceRule, error) {
-	if roomTypeID == "" {
-		return nil, errors.New("room_type_id is required")
+func (uc *PricingUseCase) GetRules(ctx context.Context, roomTypeID, hotelID string) ([]entity.PriceRule, error) {
+	if roomTypeID != "" {
+		return uc.priceRepo.ListByRoomType(ctx, roomTypeID)
 	}
-	return uc.priceRepo.ListByRoomType(ctx, roomTypeID)
+	if hotelID != "" {
+		return uc.priceRepo.ListByHotel(ctx, hotelID)
+	}
+	return nil, errors.New("room_type_id or hotel_id is required")
 }

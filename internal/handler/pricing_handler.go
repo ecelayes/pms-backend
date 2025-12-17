@@ -46,12 +46,13 @@ func (h *PricingHandler) DeleteRule(c echo.Context) error {
 
 func (h *PricingHandler) GetRules(c echo.Context) error {
 	roomTypeID := c.QueryParam("room_type_id")
-	if roomTypeID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "room_type_id query param is required"})
-	}
+	hotelID := c.QueryParam("hotel_id")
 
-	rules, err := h.uc.GetRules(c.Request().Context(), roomTypeID)
+	rules, err := h.uc.GetRules(c.Request().Context(), roomTypeID, hotelID)
 	if err != nil {
+		if err.Error() == "room_type_id or hotel_id is required" {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 

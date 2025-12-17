@@ -129,3 +129,28 @@ func (r *PriceRepository) GetByID(ctx context.Context, id string) (*entity.Price
 	}
 	return &pr, nil
 }
+
+func (r *PriceRepository) ListByHotel(ctx context.Context, hotelID string) ([]entity.PriceRule, error) {
+	query := `
+		SELECT pr.id, pr.room_type_id, LOWER(pr.validity_range), UPPER(pr.validity_range), pr.price, pr.created_at, pr.updated_at
+		FROM price_rules pr
+		JOIN room_types rt ON pr.room_type_id = rt.id
+		WHERE rt.hotel_id = $1 AND rt.deleted_at IS NULL AND pr.deleted_at IS NULL
+		ORDER BY pr.validity_range ASC
+	`
+	rows, err := r.db.Query(ctx, query, hotelID)
+	if err != nil {
+		return nil, fmt.Errorf("list by hotel: %w", err)
+	}
+	defer rows.Close()
+
+	var rules []entity.PriceRule
+	for rows.Next() {
+		var pr entity.PriceRule
+		if err := rows.Scan(&pr.ID, &pr.RoomTypeID, &pr.Start, &pr.End, &pr.Price, &pr.CreatedAt, &pr.UpdatedAt); err != nil {
+			return nil, err
+		}
+		rules = append(rules, pr)
+	}
+	return rules, nil
+}
