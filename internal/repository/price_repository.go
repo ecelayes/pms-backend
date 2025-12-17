@@ -62,23 +62,25 @@ func (r *PriceRepository) BatchCreate(ctx context.Context, tx pgx.Tx, rules []en
 		return nil
 	}
 
-	query := "INSERT INTO price_rules (id, room_type_id, validity_range, price, created_at, updated_at) VALUES "
-	values := []interface{}{}
-	placeholders := []string{}
+	var query strings.Builder
+	query.WriteString("INSERT INTO price_rules (id, room_type_id, validity_range, price, created_at, updated_at) VALUES ")
 	
+	values := make([]interface{}, 0, len(rules)*4)
+	now := time.Now()
+
 	for i, rule := range rules {
-		offset := i * 4
+		if i > 0 {
+			query.WriteString(",")
+		}
+		offset := i * 6
+		query.WriteString(fmt.Sprintf("($%d, $%d, $%d::daterange, $%d, $%d, $%d)", 
+			offset+1, offset+2, offset+3, offset+4, offset+5, offset+6))
+
 		rangeStr := fmt.Sprintf("[%s, %s)", rule.Start.Format("2006-01-02"), rule.End.Format("2006-01-02"))
-		
-		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d, $%d::daterange, $%d, NOW(), NOW())", 
-			offset+1, offset+2, offset+3, offset+4))
-		
-		values = append(values, rule.ID, rule.RoomTypeID, rangeStr, rule.Price)
+		values = append(values, rule.ID, rule.RoomTypeID, rangeStr, rule.Price, now, now)
 	}
 
-	query += strings.Join(placeholders, ",")
-	
-	_, err := tx.Exec(ctx, query, values...)
+	_, err := tx.Exec(ctx, query.String(), values...)
 	if err != nil {
 		return fmt.Errorf("batch create: %w", err)
 	}
