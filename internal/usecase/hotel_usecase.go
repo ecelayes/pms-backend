@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -21,13 +20,13 @@ func NewHotelUseCase(repo *repository.HotelRepository) *HotelUseCase {
 
 func (uc *HotelUseCase) Create(ctx context.Context, req entity.CreateHotelRequest) (string, error) {
 	if req.OrganizationID == "" {
-		return "", errors.New("organization_id is required")
+		return "", entity.ErrInvalidInput
 	}
 	if req.Name == "" || req.Code == "" {
-		return "", errors.New("name and code are required")
+		return "", entity.ErrInvalidInput
 	}
 	if len(req.Code) < 3 || len(req.Code) > 5 {
-		return "", errors.New("code must be between 3 and 5 characters")
+		return "", entity.ErrInvalidInput
 	}
 	
 	hotelID, err := uuid.NewV7()
@@ -47,20 +46,26 @@ func (uc *HotelUseCase) Create(ctx context.Context, req entity.CreateHotelReques
 	return uc.repo.Create(ctx, hotel)
 }
 
-func (uc *HotelUseCase) ListByOrganization(ctx context.Context, orgID string) ([]entity.Hotel, error) {
+func (uc *HotelUseCase) ListByOrganization(ctx context.Context, orgID string, pagination entity.PaginationRequest) ([]entity.Hotel, int64, error) {
 	if orgID == "" {
-		return nil, errors.New("organization_id is required")
+		return nil, 0, entity.ErrInvalidInput
 	}
-	return uc.repo.ListByOrganization(ctx, orgID)
+	return uc.repo.ListByOrganization(ctx, orgID, pagination)
 }
 
 func (uc *HotelUseCase) GetByID(ctx context.Context, id string) (*entity.Hotel, error) {
+	if _, err := uuid.Parse(id); err != nil {
+		return nil, entity.ErrRecordNotFound
+	}
 	return uc.repo.GetByID(ctx, id)
 }
 
 func (uc *HotelUseCase) Update(ctx context.Context, id string, req entity.UpdateHotelRequest) error {
+	if _, err := uuid.Parse(id); err != nil {
+		return entity.ErrRecordNotFound
+	}
 	if req.Name == "" && req.Code == "" {
-		return errors.New("nothing to update")
+		return entity.ErrInvalidInput
 	}
 	if req.Code != "" {
 		req.Code = strings.ToUpper(req.Code)
@@ -69,5 +74,8 @@ func (uc *HotelUseCase) Update(ctx context.Context, id string, req entity.Update
 }
 
 func (uc *HotelUseCase) Delete(ctx context.Context, id string) error {
+	if _, err := uuid.Parse(id); err != nil {
+		return entity.ErrRecordNotFound
+	}
 	return uc.repo.Delete(ctx, id)
 }

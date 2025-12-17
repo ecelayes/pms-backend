@@ -9,6 +9,8 @@ type AvailabilityFilter struct {
 	Adults   int       `json:"adults"`
 	Children int       `json:"children"`
 	Rooms    int       `json:"rooms"`
+	Page     int       `json:"page"`
+	Limit    int       `json:"limit"`
 }
 
 type DailyRate struct {

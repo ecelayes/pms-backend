@@ -60,8 +60,9 @@ func (s *PricingSuite) TestBulkPricingLogic() {
 	resGet := s.MakeRequest("GET", "/api/v1/pricing/rules?room_type_id="+s.roomID, nil, s.token)
 	s.Equal(http.StatusOK, resGet.Code)
 
-	var rules []entity.PriceRule
-	json.Unmarshal(resGet.Body.Bytes(), &rules)
+	var response entity.PaginatedResponse[entity.PriceRule]
+	json.Unmarshal(resGet.Body.Bytes(), &response)
+	rules := response.Data
 
 	s.Len(rules, 3, "I should have cut the base ruler into three pieces.")
 	
@@ -70,6 +71,7 @@ func (s *PricingSuite) TestBulkPricingLogic() {
 		s.Equal(200.0, rules[1].Price, "Fragment 2 incorrect")
 		s.Equal(100.0, rules[2].Price, "Fragment 3 incorrect")
 	}
+	s.Equal(3, int(response.Meta.TotalItems))
 }
 
 func (s *PricingSuite) TestListByHotel() {
@@ -82,8 +84,10 @@ func (s *PricingSuite) TestListByHotel() {
 	resGet := s.MakeRequest("GET", "/api/v1/pricing/rules?hotel_id="+s.hotelID, nil, s.token)
 	s.Equal(http.StatusOK, resGet.Code)
 	
-	var rules []entity.PriceRule
-	json.Unmarshal(resGet.Body.Bytes(), &rules)
+	var response entity.PaginatedResponse[entity.PriceRule]
+	json.Unmarshal(resGet.Body.Bytes(), &response)
+	rules := response.Data
+
 	s.Len(rules, 1)
 	if len(rules) > 0 {
 		s.Equal(50.0, rules[0].Price)
@@ -99,17 +103,42 @@ func (s *PricingSuite) TestDeletePriceRule() {
 	}, s.token)
 
 	resGet := s.MakeRequest("GET", "/api/v1/pricing/rules?room_type_id="+s.roomID, nil, s.token)
-	var rules []entity.PriceRule
-	json.Unmarshal(resGet.Body.Bytes(), &rules)
+	var response entity.PaginatedResponse[entity.PriceRule]
+	json.Unmarshal(resGet.Body.Bytes(), &response)
+	rules := response.Data
 	ruleID := rules[0].ID
 
 	resDel := s.MakeRequest("DELETE", "/api/v1/pricing/rules/"+ruleID, nil, s.token)
 	s.Equal(http.StatusOK, resDel.Code)
 
 	resGet2 := s.MakeRequest("GET", "/api/v1/pricing/rules?room_type_id="+s.roomID, nil, s.token)
-	var rules2 []entity.PriceRule
-	json.Unmarshal(resGet2.Body.Bytes(), &rules2)
+	var response2 entity.PaginatedResponse[entity.PriceRule]
+	json.Unmarshal(resGet2.Body.Bytes(), &response2)
+	rules2 := response2.Data
 	s.Len(rules2, 0, "The rule should have been deleted.")
+}
+
+func (s *PricingSuite) TestPricingValidation() {
+	res := s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
+		"room_type_id": s.roomID,
+		"start":        "2025-02-01",
+		"end":          "2025-01-01",
+		"price":        100.0,
+	}, s.token)
+	s.Equal(http.StatusBadRequest, res.Code)
+
+	res2 := s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
+		"room_type_id": s.roomID,
+		"start":        "2025-02-01",
+		"end":          "2025-02-05",
+		"price":        -50.0,
+	}, s.token)
+	s.Equal(http.StatusBadRequest, res2.Code)
+}
+
+func (s *PricingSuite) TestPricingNotFound() {
+	resDel := s.MakeRequest("DELETE", "/api/v1/pricing/rules/00000000-0000-0000-0000-000000000000", nil, s.token)
+	s.Equal(http.StatusNotFound, resDel.Code)
 }
 
 func TestPricingSuite(t *testing.T) {

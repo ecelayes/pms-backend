@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ecelayes/pms-backend/internal/entity"
 )
@@ -35,6 +36,10 @@ func (r *UserRepository) Create(ctx context.Context, tx pgx.Tx, u entity.User) e
 	}
 
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
+			return entity.ErrConflict
+		}
 		return fmt.Errorf("create user: %w", err)
 	}
 	return nil
@@ -94,16 +99,32 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*entity.User, 
 	return &u, nil
 }
 
-func (r *UserRepository) GetAllByOrganization(ctx context.Context, orgID string) ([]entity.User, error) {
+func (r *UserRepository) GetAllByOrganization(ctx context.Context, orgID string, pagination entity.PaginationRequest) ([]entity.User, int64, error) {
+	countQuery := `
+		SELECT COUNT(*)
+		FROM users u
+		JOIN organization_members om ON u.id = om.user_id
+		WHERE om.organization_id = $1 AND u.deleted_at IS NULL
+	`
+	var total int64
+	if err := r.db.QueryRow(ctx, countQuery, orgID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count org users: %w", err)
+	}
+
 	query := `
 		SELECT u.id, u.email, u.first_name, u.last_name, u.phone, u.created_at, u.updated_at, om.role
 		FROM users u
 		JOIN organization_members om ON u.id = om.user_id
 		WHERE om.organization_id = $1 AND u.deleted_at IS NULL
+		ORDER BY u.created_at DESC
+		LIMIT $2 OFFSET $3
 	`
-	rows, err := r.db.Query(ctx, query, orgID)
+	
+	offset := (pagination.Page - 1) * pagination.Limit
+	
+	rows, err := r.db.Query(ctx, query, orgID, pagination.Limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list org users: %w", err)
+		return nil, 0, fmt.Errorf("list org users: %w", err)
 	}
 	defer rows.Close()
 
@@ -114,11 +135,11 @@ func (r *UserRepository) GetAllByOrganization(ctx context.Context, orgID string)
 			&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.Phone, 
 			&u.CreatedAt, &u.UpdatedAt, &u.Role,
 		); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		users = append(users, u)
 	}
-	return users, nil
+	return users, total, nil
 }
 
 func (r *UserRepository) Update(ctx context.Context, userID, orgID string, req entity.UpdateUserRequest) error {
@@ -141,8 +162,9 @@ func (r *UserRepository) Update(ctx context.Context, userID, orgID string, req e
 		query += fmt.Sprintf(" WHERE id = $%d", argID)
 		args = append(args, userID)
 		
-		_, err := r.db.Exec(ctx, query, args...)
+		cmd, err := r.db.Exec(ctx, query, args...)
 		if err != nil { return err }
+		if cmd.RowsAffected() == 0 { return entity.ErrRecordNotFound }
 	}
 
 	if req.Role != "" {

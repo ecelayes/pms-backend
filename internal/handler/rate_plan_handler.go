@@ -25,6 +25,9 @@ func (h *RatePlanHandler) Create(c echo.Context) error {
 
 	id, err := h.uc.Create(c.Request().Context(), req)
 	if err != nil {
+		if errors.Is(err, entity.ErrInvalidInput) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
@@ -37,7 +40,18 @@ func (h *RatePlanHandler) List(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "hotel_id is required"})
 	}
 
-	plans, err := h.uc.ListByHotel(c.Request().Context(), hotelID)
+	var pagination entity.PaginationRequest
+	if err := c.Bind(&pagination); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid pagination params"})
+	}
+	if pagination.Page < 1 {
+		pagination.Page = 1
+	}
+	if pagination.Limit < 1 {
+		pagination.Limit = 10 
+	}
+
+	plans, total, err := h.uc.ListByHotel(c.Request().Context(), hotelID, pagination)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -46,7 +60,22 @@ func (h *RatePlanHandler) List(c echo.Context) error {
 		plans = []entity.RatePlan{}
 	}
 
-	return c.JSON(http.StatusOK, plans)
+	totalPage := int(total) / pagination.Limit
+	if int(total)%pagination.Limit != 0 {
+		totalPage++
+	}
+
+	response := entity.PaginatedResponse[entity.RatePlan]{
+		Data: plans,
+		Meta: entity.PaginationMeta{
+			Page:       pagination.Page,
+			Limit:      pagination.Limit,
+			TotalItems: total,
+			TotalPages: totalPage,
+		},
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 func (h *RatePlanHandler) GetByID(c echo.Context) error {

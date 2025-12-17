@@ -31,28 +31,30 @@ func NewAvailabilityUseCase(
 	}
 }
 
-func (uc *AvailabilityUseCase) Search(ctx context.Context, filter entity.AvailabilityFilter) ([]entity.AvailabilitySearch, error) {
+func (uc *AvailabilityUseCase) Search(ctx context.Context, filter entity.AvailabilityFilter) ([]entity.AvailabilitySearch, int64, error) {
 	if !filter.End.After(filter.Start) {
-		return nil, entity.ErrInvalidDateRange
+		return nil, 0, entity.ErrInvalidDateRange
 	}
 
 	var roomTypes []entity.RoomType
 	var err error
 	if filter.HotelID != "" {
-		roomTypes, err = uc.roomRepo.ListByHotel(ctx, filter.HotelID)
+		roomTypes, _, err = uc.roomRepo.ListByHotel(ctx, filter.HotelID, entity.PaginationRequest{Page: 1, Limit: 1000})
 	} else {
 		roomTypes, err = uc.roomRepo.GetAll(ctx)
 	}
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	var ratePlans []entity.RatePlan
 	if filter.HotelID != "" {
-		ratePlans, err = uc.ratePlanRepo.GetByHotel(ctx, filter.HotelID)
-		if err != nil {
-			return nil, err
-		}
+		ratePlans, _, err = uc.ratePlanRepo.ListByHotel(ctx, filter.HotelID, entity.PaginationRequest{Page: 1, Limit: 1000})
+	} else {
+		ratePlans, err = uc.ratePlanRepo.GetAll(ctx)
+	}
+	if err != nil {
+		return nil, 0, err
 	}
 
 	var results []entity.AvailabilitySearch
@@ -73,7 +75,7 @@ func (uc *AvailabilityUseCase) Search(ctx context.Context, filter entity.Availab
 
 		reservedCount, err := uc.resRepo.CountOverlapping(ctx, rt.ID, filter.Start, filter.End)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		available := rt.TotalQuantity - reservedCount
@@ -95,8 +97,16 @@ func (uc *AvailabilityUseCase) Search(ctx context.Context, filter entity.Availab
 		var rateOptions []entity.RateOption
 
 		for _, rp := range ratePlans {
-			if rp.RoomTypeID != nil && *rp.RoomTypeID != rt.ID { continue }
-			if !rp.Active { continue }
+			if rp.HotelID != rt.HotelID {
+				continue
+			}
+
+			if rp.RoomTypeID != nil && *rp.RoomTypeID != rt.ID { 
+				continue 
+			}
+			if !rp.Active { 
+				continue 
+			}
 
 			finalTotal := uc.pricingService.ApplyRatePlan(baseTotal, rp, totalPax, nights)
 			
@@ -131,7 +141,26 @@ func (uc *AvailabilityUseCase) Search(ctx context.Context, filter entity.Availab
 		}
 	}
 
-	return results, nil
+	totalItems := int64(len(results))
+	
+	page := filter.Page
+	if page < 1 { page = 1 }
+	limit := filter.Limit
+	if limit < 1 { limit = 10 }
+
+	start := (page - 1) * limit
+	end := start + limit
+
+	if start > int(totalItems) {
+		start = int(totalItems)
+	}
+	if end > int(totalItems) {
+		end = int(totalItems)
+	}
+
+	paginatedResults := results[start:end]
+
+	return paginatedResults, totalItems, nil
 }
 
 func calculateStayPrice(start, end time.Time, rules []entity.PriceRule) ([]entity.DailyRate, float64, bool) {

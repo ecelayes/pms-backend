@@ -36,16 +36,38 @@ func (r *OrganizationRepository) Create(ctx context.Context, tx pgx.Tx, org enti
 	return nil
 }
 
-func (r *OrganizationRepository) GetAll(ctx context.Context) ([]entity.Organization, error) {
-	query := `
-		SELECT id, name, code, created_at, updated_at 
-		FROM organizations 
-		WHERE deleted_at IS NULL 
-		ORDER BY name ASC
-	`
-	rows, err := r.db.Query(ctx, query)
+func (r *OrganizationRepository) GetAll(ctx context.Context, pagination entity.PaginationRequest) ([]entity.Organization, int64, error) {
+	countQuery := `SELECT COUNT(*) FROM organizations WHERE deleted_at IS NULL`
+	var total int64
+	if err := r.db.QueryRow(ctx, countQuery).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count organizations: %w", err)
+	}
+
+	var query string
+	var args []interface{}
+
+	if pagination.Unlimited {
+		query = `
+			SELECT id, name, code, created_at, updated_at 
+			FROM organizations 
+			WHERE deleted_at IS NULL 
+			ORDER BY name ASC
+		`
+	} else {
+		query = `
+			SELECT id, name, code, created_at, updated_at 
+			FROM organizations 
+			WHERE deleted_at IS NULL 
+			ORDER BY name ASC
+			LIMIT $1 OFFSET $2
+		`
+		offset := (pagination.Page - 1) * pagination.Limit
+		args = append(args, pagination.Limit, offset)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list organizations: %w", err)
+		return nil, 0, fmt.Errorf("list organizations: %w", err)
 	}
 	defer rows.Close()
 
@@ -53,11 +75,11 @@ func (r *OrganizationRepository) GetAll(ctx context.Context) ([]entity.Organizat
 	for rows.Next() {
 		var org entity.Organization
 		if err := rows.Scan(&org.ID, &org.Name, &org.Code, &org.CreatedAt, &org.UpdatedAt); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		list = append(list, org)
 	}
-	return list, nil
+	return list, total, nil
 }
 
 func (r *OrganizationRepository) GetByID(ctx context.Context, id string) (*entity.Organization, error) {
@@ -69,8 +91,8 @@ func (r *OrganizationRepository) GetByID(ctx context.Context, id string) (*entit
 	var org entity.Organization
 	err := r.db.QueryRow(ctx, query, id).Scan(&org.ID, &org.Name, &org.Code, &org.CreatedAt, &org.UpdatedAt)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("organization not found")
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, entity.ErrRecordNotFound
 		}
 		return nil, fmt.Errorf("get org: %w", err)
 	}
@@ -84,7 +106,7 @@ func (r *OrganizationRepository) Update(ctx context.Context, id string, req enti
 		return fmt.Errorf("update org: %w", err)
 	}
 	if cmd.RowsAffected() == 0 {
-		return fmt.Errorf("organization not found")
+		return entity.ErrRecordNotFound
 	}
 	return nil
 }
@@ -96,7 +118,7 @@ func (r *OrganizationRepository) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("delete org: %w", err)
 	}
 	if cmd.RowsAffected() == 0 {
-		return fmt.Errorf("organization not found")
+		return entity.ErrRecordNotFound
 	}
 	return nil
 }

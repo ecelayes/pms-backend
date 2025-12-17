@@ -2,9 +2,11 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ecelayes/pms-backend/internal/entity"
 )
@@ -24,21 +26,47 @@ func (r *HotelServiceRepository) Create(ctx context.Context, s entity.HotelServi
 	`
 	_, err := r.db.Exec(ctx, query, s.ID, s.Name, s.Description, s.Icon)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return entity.ErrConflict
+		}
 		return fmt.Errorf("create hotel service: %w", err)
 	}
 	return nil
 }
 
-func (r *HotelServiceRepository) GetAll(ctx context.Context) ([]entity.HotelService, error) {
-	query := `
-		SELECT id, name, description, icon 
-		FROM hotel_services 
-		WHERE deleted_at IS NULL 
-		ORDER BY name ASC
-	`
-	rows, err := r.db.Query(ctx, query)
+func (r *HotelServiceRepository) GetAll(ctx context.Context, pagination entity.PaginationRequest) ([]entity.HotelService, int64, error) {
+	countQuery := `SELECT COUNT(*) FROM hotel_services WHERE deleted_at IS NULL`
+	var total int64
+	if err := r.db.QueryRow(ctx, countQuery).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count hotel services: %w", err)
+	}
+
+	var query string
+	var args []interface{}
+
+	if pagination.Unlimited {
+		query = `
+			SELECT id, name, description, icon 
+			FROM hotel_services 
+			WHERE deleted_at IS NULL 
+			ORDER BY name ASC
+		`
+	} else {
+		query = `
+			SELECT id, name, description, icon 
+			FROM hotel_services 
+			WHERE deleted_at IS NULL 
+			ORDER BY name ASC
+			LIMIT $1 OFFSET $2
+		`
+		offset := (pagination.Page - 1) * pagination.Limit
+		args = append(args, pagination.Limit, offset)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list hotel services: %w", err)
+		return nil, 0, fmt.Errorf("list hotel services: %w", err)
 	}
 	defer rows.Close()
 
@@ -46,11 +74,11 @@ func (r *HotelServiceRepository) GetAll(ctx context.Context) ([]entity.HotelServ
 	for rows.Next() {
 		var s entity.HotelService
 		if err := rows.Scan(&s.ID, &s.Name, &s.Description, &s.Icon); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		list = append(list, s)
 	}
-	return list, nil
+	return list, total, nil
 }
 
 func (r *HotelServiceRepository) GetByID(ctx context.Context, id string) (*entity.HotelService, error) {

@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -21,22 +20,22 @@ func NewRoomUseCase(repo *repository.RoomRepository) *RoomUseCase {
 
 func (uc *RoomUseCase) Create(ctx context.Context, req entity.CreateRoomTypeRequest) (string, error) {
 	if req.HotelID == "" || req.Name == "" {
-		return "", errors.New("hotel_id and name are required")
+		return "", entity.ErrInvalidInput
 	}
 	if len(req.Code) != 3 {
-		return "", errors.New("room code must be exactly 3 characters")
+		return "", entity.ErrInvalidInput
 	}
 	if req.TotalQuantity < 0 {
-		return "", errors.New("total quantity cannot be negative")
+		return "", entity.ErrInvalidInput
 	}
 	if req.BasePrice < 0 {
-		return "", errors.New("base price cannot be negative")
+		return "", entity.ErrInvalidInput
 	}
 	if req.MaxOccupancy <= 0 {
-		return "", errors.New("max occupancy must be at least 1")
+		return "", entity.ErrInvalidInput
 	}
 	if req.MaxAdults <= 0 {
-		return "", errors.New("max adults must be at least 1")
+		return "", entity.ErrInvalidInput
 	}
 
 	newID, err := uuid.NewV7()
@@ -62,32 +61,38 @@ func (uc *RoomUseCase) Create(ctx context.Context, req entity.CreateRoomTypeRequ
 	return uc.repo.CreateRoomType(ctx, rt)
 }
 
-func (uc *RoomUseCase) ListByHotel(ctx context.Context, hotelID string) ([]entity.RoomType, error) {
+func (uc *RoomUseCase) ListByHotel(ctx context.Context, hotelID string, pagination entity.PaginationRequest) ([]entity.RoomType, int64, error) {
 	if hotelID == "" {
-		return nil, errors.New("hotel_id is required")
+		return nil, 0, entity.ErrInvalidInput
 	}
-	return uc.repo.ListByHotel(ctx, hotelID)
+	return uc.repo.ListByHotel(ctx, hotelID, pagination)
 }
 
 func (uc *RoomUseCase) GetByID(ctx context.Context, id string) (*entity.RoomType, error) {
+	if _, err := uuid.Parse(id); err != nil {
+		return nil, entity.ErrRecordNotFound
+	}
 	return uc.repo.GetByID(ctx, id)
 }
 
 func (uc *RoomUseCase) Update(ctx context.Context, id string, req entity.UpdateRoomTypeRequest) error {
+	if _, err := uuid.Parse(id); err != nil {
+		return entity.ErrRecordNotFound
+	}
 	if req.TotalQuantity != nil && *req.TotalQuantity < 0 {
-		return errors.New("total quantity cannot be negative")
+		return entity.ErrInvalidInput
 	}
 	if req.MaxOccupancy != nil && *req.MaxOccupancy <= 0 {
-		return errors.New("max occupancy must be at least 1")
+		return entity.ErrInvalidInput
 	}
 	if req.MaxAdults != nil && *req.MaxAdults <= 0 {
-		return errors.New("max adults must be at least 1")
+		return entity.ErrInvalidInput
 	}
 	if req.MaxChildren != nil && *req.MaxChildren < 0 {
-		return errors.New("max children cannot be negative")
+		return entity.ErrInvalidInput
 	}
 	if req.BasePrice != nil && *req.BasePrice < 0 {
-		return errors.New("base price cannot be negative")
+		return entity.ErrInvalidInput
 	}
 
 	if req.Code != "" {
@@ -98,5 +103,8 @@ func (uc *RoomUseCase) Update(ctx context.Context, id string, req entity.UpdateR
 }
 
 func (uc *RoomUseCase) Delete(ctx context.Context, id string) error {
+	if _, err := uuid.Parse(id); err != nil {
+		return entity.ErrRecordNotFound
+	}
 	return uc.repo.Delete(ctx, id)
 }

@@ -8,6 +8,8 @@ var (
 	ErrInvalidDateRange  = errors.New("check-out date must be after check-in date")
 	ErrInvalidID         = errors.New("invalid UUID format")
 	ErrEmptyBody         = errors.New("request body cannot be empty")
+	ErrInvalidInput      = errors.New("invalid input")
+	ErrConflict          = errors.New("conflict: resource already exists")
 
 	// Business Rules (Booking)
 	ErrNoAvailability       = errors.New("no availability for selected dates")

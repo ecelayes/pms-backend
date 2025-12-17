@@ -2,10 +2,12 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ecelayes/pms-backend/internal/entity"
 )
@@ -34,6 +36,10 @@ func (r *RoomRepository) CreateRoomType(ctx context.Context, rt entity.RoomType)
 	).Scan(&id)
 	
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return "", entity.ErrConflict
+		}
 		return "", fmt.Errorf("create room type: %w", err)
 	}
 	return id, nil
@@ -116,17 +122,32 @@ func (r *RoomRepository) GetByIDLocked(ctx context.Context, tx pgx.Tx, id string
 	return &rt, nil
 }
 
-func (r *RoomRepository) ListByHotel(ctx context.Context, hotelID string) ([]entity.RoomType, error) {
+func (r *RoomRepository) ListByHotel(ctx context.Context, hotelID string, pagination entity.PaginationRequest) ([]entity.RoomType, int64, error) {
+	countQuery := `
+		SELECT COUNT(*)
+		FROM room_types
+		WHERE hotel_id = $1 AND deleted_at IS NULL
+	`
+	var total int64
+	if err := r.db.QueryRow(ctx, countQuery, hotelID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count room types: %w", err)
+	}
+
 	query := `
 		SELECT id, hotel_id, name, code, total_quantity, base_price,
 		       max_occupancy, max_adults, max_children, amenities, 
 		       created_at, updated_at
 		FROM room_types
 		WHERE hotel_id = $1 AND deleted_at IS NULL
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
 	`
-	rows, err := r.db.Query(ctx, query, hotelID)
+	
+	offset := (pagination.Page - 1) * pagination.Limit
+	
+	rows, err := r.db.Query(ctx, query, hotelID, pagination.Limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list room types: %w", err)
+		return nil, 0, fmt.Errorf("list room types: %w", err)
 	}
 	defer rows.Close()
 
@@ -139,11 +160,11 @@ func (r *RoomRepository) ListByHotel(ctx context.Context, hotelID string) ([]ent
 			&rt.CreatedAt, &rt.UpdatedAt,
 		)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		rooms = append(rooms, rt)
 	}
-	return rooms, nil
+	return rooms, total, nil
 }
 
 func (r *RoomRepository) Update(ctx context.Context, id string, req entity.UpdateRoomTypeRequest) error {
@@ -224,7 +245,7 @@ func (r *RoomRepository) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("delete room type: %w", err)
 	}
 	if cmd.RowsAffected() == 0 {
-		return fmt.Errorf("room type not found")
+		return entity.ErrRecordNotFound
 	}
 	return nil
 }

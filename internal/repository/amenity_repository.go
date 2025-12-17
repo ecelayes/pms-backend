@@ -2,9 +2,11 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ecelayes/pms-backend/internal/entity"
 )
@@ -20,22 +22,56 @@ func NewAmenityRepository(db *pgxpool.Pool) *AmenityRepository {
 func (r *AmenityRepository) Create(ctx context.Context, a entity.Amenity) error {
 	query := `INSERT INTO amenities (id, name, description, icon, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW())`
 	_, err := r.db.Exec(ctx, query, a.ID, a.Name, a.Description, a.Icon)
-	return err
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return entity.ErrConflict
+		}
+		return err
+	}
+	return nil
 }
 
-func (r *AmenityRepository) GetAll(ctx context.Context) ([]entity.Amenity, error) {
-	query := `SELECT id, name, description, icon FROM amenities WHERE deleted_at IS NULL ORDER BY name ASC`
-	rows, err := r.db.Query(ctx, query)
-	if err != nil { return nil, err }
+func (r *AmenityRepository) GetAll(ctx context.Context, pagination entity.PaginationRequest) ([]entity.Amenity, int64, error) {
+	countQuery := `SELECT COUNT(*) FROM amenities WHERE deleted_at IS NULL`
+	var total int64
+	if err := r.db.QueryRow(ctx, countQuery).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count amenities: %w", err)
+	}
+
+	var query string
+	var args []interface{}
+
+	if pagination.Unlimited {
+		query = `
+			SELECT id, name, description, icon 
+			FROM amenities 
+			WHERE deleted_at IS NULL 
+			ORDER BY name ASC
+		`
+	} else {
+		query = `
+			SELECT id, name, description, icon 
+			FROM amenities 
+			WHERE deleted_at IS NULL 
+			ORDER BY name ASC
+			LIMIT $1 OFFSET $2
+		`
+		offset := (pagination.Page - 1) * pagination.Limit
+		args = append(args, pagination.Limit, offset)
+	}
+	
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil { return nil, 0, err }
 	defer rows.Close()
 
 	var list []entity.Amenity
 	for rows.Next() {
 		var a entity.Amenity
-		if err := rows.Scan(&a.ID, &a.Name, &a.Description, &a.Icon); err != nil { return nil, err }
+		if err := rows.Scan(&a.ID, &a.Name, &a.Description, &a.Icon); err != nil { return nil, 0, err }
 		list = append(list, a)
 	}
-	return list, nil
+	return list, total, nil
 }
 
 func (r *AmenityRepository) GetByID(ctx context.Context, id string) (*entity.Amenity, error) {

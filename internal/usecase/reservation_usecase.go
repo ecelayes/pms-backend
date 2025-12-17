@@ -60,10 +60,10 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 	nights := int(end.Sub(start).Hours() / 24)
 
 	if req.Adults <= 0 {
-		return "", errors.New("at least 1 adult is required")
+		return "", fmt.Errorf("%w: at least 1 adult is required", entity.ErrInvalidInput)
 	}
 	if req.Children < 0 {
-		return "", errors.New("children cannot be negative")
+		return "", fmt.Errorf("%w: children cannot be negative", entity.ErrInvalidInput)
 	}
 
 	roomType, err := uc.roomRepo.GetByID(ctx, req.RoomTypeID)
@@ -72,13 +72,13 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 	}
 
 	if req.Adults > roomType.MaxAdults {
-		return "", errors.New("exceeds max adults for this room")
+		return "", fmt.Errorf("%w: exceeds max adults for this room", entity.ErrInvalidInput)
 	}
 	if req.Children > roomType.MaxChildren {
-		return "", errors.New("exceeds max children for this room")
+		return "", fmt.Errorf("%w: exceeds max children for this room", entity.ErrInvalidInput)
 	}
 	if (req.Adults + req.Children) > roomType.MaxOccupancy {
-		return "", errors.New("exceeds max total occupancy for this room")
+		return "", fmt.Errorf("%w: exceeds max total occupancy for this room", entity.ErrInvalidInput)
 	}
 
 	hotelCode, roomCode, err := uc.roomRepo.GetCodesForGeneration(ctx, req.RoomTypeID)

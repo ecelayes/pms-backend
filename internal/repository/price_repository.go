@@ -85,26 +85,40 @@ func (r *PriceRepository) BatchCreate(ctx context.Context, tx pgx.Tx, rules []en
 	return nil
 }
 
-func (r *PriceRepository) ListByRoomType(ctx context.Context, roomTypeID string) ([]entity.PriceRule, error) {
+func (r *PriceRepository) ListByRoomType(ctx context.Context, roomTypeID string, pagination entity.PaginationRequest) ([]entity.PriceRule, int64, error) {
+	countQuery := `
+		SELECT COUNT(*)
+		FROM price_rules
+		WHERE room_type_id = $1 AND deleted_at IS NULL
+	`
+	var total int64
+	if err := r.db.QueryRow(ctx, countQuery, roomTypeID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count price rules: %w", err)
+	}
+
 	query := `
 		SELECT id, room_type_id, LOWER(validity_range), UPPER(validity_range), price, created_at, updated_at
 		FROM price_rules
 		WHERE room_type_id = $1 AND deleted_at IS NULL
 		ORDER BY validity_range ASC
+		LIMIT $2 OFFSET $3
 	`
-	rows, err := r.db.Query(ctx, query, roomTypeID)
-	if err != nil { return nil, fmt.Errorf("list: %w", err) }
+	
+	offset := (pagination.Page - 1) * pagination.Limit
+	
+	rows, err := r.db.Query(ctx, query, roomTypeID, pagination.Limit, offset)
+	if err != nil { return nil, 0, fmt.Errorf("list: %w", err) }
 	defer rows.Close()
 
 	var rules []entity.PriceRule
 	for rows.Next() {
 		var pr entity.PriceRule
 		if err := rows.Scan(&pr.ID, &pr.RoomTypeID, &pr.Start, &pr.End, &pr.Price, &pr.CreatedAt, &pr.UpdatedAt); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		rules = append(rules, pr)
 	}
-	return rules, nil
+	return rules, total, nil
 }
 
 func (r *PriceRepository) Delete(ctx context.Context, id string) error {
@@ -130,17 +144,32 @@ func (r *PriceRepository) GetByID(ctx context.Context, id string) (*entity.Price
 	return &pr, nil
 }
 
-func (r *PriceRepository) ListByHotel(ctx context.Context, hotelID string) ([]entity.PriceRule, error) {
+func (r *PriceRepository) ListByHotel(ctx context.Context, hotelID string, pagination entity.PaginationRequest) ([]entity.PriceRule, int64, error) {
+	countQuery := `
+		SELECT COUNT(*)
+		FROM price_rules pr
+		JOIN room_types rt ON pr.room_type_id = rt.id
+		WHERE rt.hotel_id = $1 AND rt.deleted_at IS NULL AND pr.deleted_at IS NULL
+	`
+	var total int64
+	if err := r.db.QueryRow(ctx, countQuery, hotelID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count price rules: %w", err)
+	}
+
 	query := `
 		SELECT pr.id, pr.room_type_id, LOWER(pr.validity_range), UPPER(pr.validity_range), pr.price, pr.created_at, pr.updated_at
 		FROM price_rules pr
 		JOIN room_types rt ON pr.room_type_id = rt.id
 		WHERE rt.hotel_id = $1 AND rt.deleted_at IS NULL AND pr.deleted_at IS NULL
 		ORDER BY pr.validity_range ASC
+		LIMIT $2 OFFSET $3
 	`
-	rows, err := r.db.Query(ctx, query, hotelID)
+	
+	offset := (pagination.Page - 1) * pagination.Limit
+	
+	rows, err := r.db.Query(ctx, query, hotelID, pagination.Limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list by hotel: %w", err)
+		return nil, 0, fmt.Errorf("list by hotel: %w", err)
 	}
 	defer rows.Close()
 
@@ -148,9 +177,9 @@ func (r *PriceRepository) ListByHotel(ctx context.Context, hotelID string) ([]en
 	for rows.Next() {
 		var pr entity.PriceRule
 		if err := rows.Scan(&pr.ID, &pr.RoomTypeID, &pr.Start, &pr.End, &pr.Price, &pr.CreatedAt, &pr.UpdatedAt); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		rules = append(rules, pr)
 	}
-	return rules, nil
+	return rules, total, nil
 }

@@ -2,8 +2,11 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/ecelayes/pms-backend/internal/entity"
 )
@@ -25,20 +28,39 @@ func (r *HotelRepository) Create(ctx context.Context, h entity.Hotel) (string, e
 	var id string
 	err := r.db.QueryRow(ctx, query, h.ID, h.OrganizationID, h.Name, h.Code).Scan(&id)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return "", entity.ErrConflict
+		}
 		return "", fmt.Errorf("create hotel: %w", err)
 	}
 	return id, nil
 }
 
-func (r *HotelRepository) ListByOrganization(ctx context.Context, orgID string) ([]entity.Hotel, error) {
+func (r *HotelRepository) ListByOrganization(ctx context.Context, orgID string, pagination entity.PaginationRequest) ([]entity.Hotel, int64, error) {
+	countQuery := `
+		SELECT COUNT(*)
+		FROM hotels
+		WHERE organization_id = $1 AND deleted_at IS NULL
+	`
+	var total int64
+	if err := r.db.QueryRow(ctx, countQuery, orgID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count hotels: %w", err)
+	}
+
 	query := `
 		SELECT id, organization_id, name, code, created_at, updated_at 
 		FROM hotels 
 		WHERE organization_id = $1 AND deleted_at IS NULL
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
 	`
-	rows, err := r.db.Query(ctx, query, orgID)
+	
+	offset := (pagination.Page - 1) * pagination.Limit
+	
+	rows, err := r.db.Query(ctx, query, orgID, pagination.Limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("list hotels: %w", err)
+		return nil, 0, fmt.Errorf("list hotels: %w", err)
 	}
 	defer rows.Close()
 
@@ -46,11 +68,11 @@ func (r *HotelRepository) ListByOrganization(ctx context.Context, orgID string) 
 	for rows.Next() {
 		var h entity.Hotel
 		if err := rows.Scan(&h.ID, &h.OrganizationID, &h.Name, &h.Code, &h.CreatedAt, &h.UpdatedAt); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		hotels = append(hotels, h)
 	}
-	return hotels, nil
+	return hotels, total, nil
 }
 
 func (r *HotelRepository) GetByID(ctx context.Context, id string) (*entity.Hotel, error) {
@@ -62,6 +84,9 @@ func (r *HotelRepository) GetByID(ctx context.Context, id string) (*entity.Hotel
 	var h entity.Hotel
 	err := r.db.QueryRow(ctx, query, id).Scan(&h.ID, &h.OrganizationID, &h.Name, &h.Code, &h.CreatedAt, &h.UpdatedAt)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, entity.ErrRecordNotFound
+		}
 		return nil, fmt.Errorf("hotel not found: %w", err)
 	}
 	return &h, nil
@@ -91,7 +116,7 @@ func (r *HotelRepository) Update(ctx context.Context, id string, req entity.Upda
 		return fmt.Errorf("update hotel: %w", err)
 	}
 	if cmd.RowsAffected() == 0 {
-		return fmt.Errorf("hotel not found")
+		return entity.ErrRecordNotFound
 	}
 	return nil
 }
@@ -103,7 +128,7 @@ func (r *HotelRepository) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("delete hotel: %w", err)
 	}
 	if cmd.RowsAffected() == 0 {
-		return fmt.Errorf("hotel not found or already deleted")
+		return entity.ErrRecordNotFound
 	}
 	return nil
 }

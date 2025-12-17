@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/ecelayes/pms-backend/internal/entity"
 )
 
 type RatePlanSuite struct {
@@ -79,7 +80,17 @@ func (s *RatePlanSuite) TestRatePlanLifecycle() {
 
 	resList := s.MakeRequest("GET", "/api/v1/rate-plans?hotel_id="+s.hotelID, nil, s.token)
 	s.Equal(http.StatusOK, resList.Code)
-	s.Contains(resList.Body.String(), "Breakfast Included")
+	
+	var response entity.PaginatedResponse[entity.RatePlan]
+	json.Unmarshal(resList.Body.Bytes(), &response)
+	found := false
+	for _, rp := range response.Data {
+		if rp.ID == planID {
+			found = true
+			break
+		}
+	}
+	s.True(found, "Newly created rate plan should be in the response")
 
 	updateBody := map[string]interface{}{
 		"name": "Breakfast & Dinner",
@@ -118,6 +129,44 @@ func (s *RatePlanSuite) TestRatePlanLifecycle() {
 
 	resDelSuccess := s.MakeRequest("DELETE", "/api/v1/rate-plans/"+planID, nil, s.token)
 	s.Equal(http.StatusOK, resDelSuccess.Code)
+}
+
+func (s *RatePlanSuite) TestRatePlanValidation() {
+	res := s.MakeRequest("POST", "/api/v1/rate-plans", map[string]interface{}{
+		"hotel_id":     s.hotelID,
+		"room_type_id": s.roomTypeID,
+		"name":         "",
+		"meal_plan": map[string]interface{}{
+			"included": true, "price_per_pax": 10.0,
+		},
+	}, s.token)
+	s.Equal(http.StatusBadRequest, res.Code)
+
+	res2 := s.MakeRequest("POST", "/api/v1/rate-plans", map[string]interface{}{
+		"hotel_id":     s.hotelID,
+		"room_type_id": s.roomTypeID,
+		"name":         "Invalid Policy",
+		"cancellation_policy": map[string]interface{}{
+			"is_refundable": false,
+			"rules": []map[string]interface{}{
+				{"hours_before_check_in": 48, "penalty_type": 1, "penalty_value": 100},
+			},
+		},
+	}, s.token)
+	s.Equal(http.StatusBadRequest, res2.Code)
+}
+
+func (s *RatePlanSuite) TestRatePlanNotFound() {
+	res := s.MakeRequest("GET", "/api/v1/rate-plans/00000000-0000-0000-0000-000000000000", nil, s.token)
+	s.Equal(http.StatusNotFound, res.Code)
+
+	resUpd := s.MakeRequest("PUT", "/api/v1/rate-plans/00000000-0000-0000-0000-000000000000", map[string]interface{}{
+		"name": "Updated Name",
+	}, s.token)
+	s.Equal(http.StatusNotFound, resUpd.Code)
+
+	resDel := s.MakeRequest("DELETE", "/api/v1/rate-plans/00000000-0000-0000-0000-000000000000", nil, s.token)
+	s.Equal(http.StatusNotFound, resDel.Code)
 }
 
 func TestRatePlanSuite(t *testing.T) {

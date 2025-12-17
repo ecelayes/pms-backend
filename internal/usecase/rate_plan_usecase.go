@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 
@@ -25,11 +24,11 @@ func NewRatePlanUseCase(repo *repository.RatePlanRepository, resRepo *repository
 
 func (uc *RatePlanUseCase) Create(ctx context.Context, req entity.CreateRatePlanRequest) (string, error) {
 	if req.HotelID == "" || req.Name == "" {
-		return "", errors.New("hotel_id and name are required")
+		return "", entity.ErrInvalidInput
 	}
 
 	if !req.CancellationPolicy.IsRefundable && len(req.CancellationPolicy.Rules) > 0 {
-		return "", errors.New("non-refundable policies should not have tiered rules")
+		return "", entity.ErrInvalidInput
 	}
 
 	id, err := uuid.NewV7()
@@ -56,18 +55,25 @@ func (uc *RatePlanUseCase) Create(ctx context.Context, req entity.CreateRatePlan
 	return id.String(), nil
 }
 
-func (uc *RatePlanUseCase) ListByHotel(ctx context.Context, hotelID string) ([]entity.RatePlan, error) {
-	return uc.repo.GetByHotel(ctx, hotelID)
+func (uc *RatePlanUseCase) ListByHotel(ctx context.Context, hotelID string, pagination entity.PaginationRequest) ([]entity.RatePlan, int64, error) {
+	return uc.repo.ListByHotel(ctx, hotelID, pagination)
 }
 
 func (uc *RatePlanUseCase) GetByID(ctx context.Context, id string) (*entity.RatePlan, error) {
+	if _, err := uuid.Parse(id); err != nil {
+		return nil, entity.ErrRecordNotFound
+	}
 	return uc.repo.GetByID(ctx, id)
 }
 
 func (uc *RatePlanUseCase) Update(ctx context.Context, id string, req entity.UpdateRatePlanRequest) error {
+	if _, err := uuid.Parse(id); err != nil {
+		return entity.ErrRecordNotFound
+	}
+
 	if req.CancellationPolicy != nil {
 		if !req.CancellationPolicy.IsRefundable && len(req.CancellationPolicy.Rules) > 0 {
-			return errors.New("cannot have cancellation rules for a non-refundable policy")
+			return entity.ErrInvalidInput
 		}
 	}
 	
@@ -85,6 +91,10 @@ func (uc *RatePlanUseCase) Update(ctx context.Context, id string, req entity.Upd
 }
 
 func (uc *RatePlanUseCase) Delete(ctx context.Context, id string) error {
+	if _, err := uuid.Parse(id); err != nil {
+		return entity.ErrRecordNotFound
+	}
+
 	count, err := uc.resRepo.CountActiveByRatePlan(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to check active reservations: %w", err)

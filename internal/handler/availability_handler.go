@@ -47,6 +47,19 @@ func (h *AvailabilityHandler) Get(c echo.Context) error {
 	children := 0
 	if childrenStr != "" { children, _ = strconv.Atoi(childrenStr) }
 
+	page := 1
+	limit := 10
+	
+	pageStr := c.QueryParam("page")
+	if pageStr != "" { 
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 { page = p }
+	}
+	
+	limitStr := c.QueryParam("limit")
+	if limitStr != "" { 
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 { limit = l }
+	}
+
 	filter := entity.AvailabilityFilter{
 		Start:    start,
 		End:      end,
@@ -54,9 +67,11 @@ func (h *AvailabilityHandler) Get(c echo.Context) error {
 		Rooms:    rooms,
 		Adults:   adults,
 		Children: children,
+		Page:     page,
+		Limit:    limit,
 	}
 
-	results, err := h.uc.Search(c.Request().Context(), filter)
+	results, total, err := h.uc.Search(c.Request().Context(), filter)
 	
 	if err != nil {
 		if errors.Is(err, entity.ErrInvalidDateRange) {
@@ -69,5 +84,20 @@ func (h *AvailabilityHandler) Get(c echo.Context) error {
 		results = []entity.AvailabilitySearch{}
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{"data": results})
+	totalPage := int(total) / limit
+	if int(total)%limit != 0 {
+		totalPage++
+	}
+
+	response := entity.PaginatedResponse[entity.AvailabilitySearch]{
+		Data: results,
+		Meta: entity.PaginationMeta{
+			Page:       page,
+			Limit:      limit,
+			TotalItems: total,
+			TotalPages: totalPage,
+		},
+	}
+
+	return c.JSON(http.StatusOK, response)
 }

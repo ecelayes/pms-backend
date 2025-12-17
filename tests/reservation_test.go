@@ -289,6 +289,35 @@ func (s *ReservationSuite) TestConcurrencyOverbooking() {
 	s.Equal(concurrentReqs-1, failCount, "The rest should fail due to overbooking (409)")
 }
 
+func (s *ReservationSuite) TestReservationValidation() {
+	res := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
+		"room_type_id":     s.roomTypeID,
+		"guest_email":      "val@test.com",
+		"guest_first_name": "Val", "guest_last_name": "Test",
+		"start":            "2025-01-10", "end": "2025-01-01",
+		"adults":           2, "children": 0,
+	}, "")
+	s.Equal(http.StatusBadRequest, res.Code)
+
+	res2 := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
+		"room_type_id":     s.roomTypeID,
+		"guest_email":      "val@test.com",
+		"guest_first_name": "Val", "guest_last_name": "Test",
+		"start":            "invalid-date", "end": "2025-01-05",
+		"adults":           2, "children": 0,
+	}, "")
+	s.Equal(http.StatusBadRequest, res2.Code)
+
+	res3 := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
+		"room_type_id":     s.roomTypeID,
+		"guest_email":      "val@test.com",
+		"guest_first_name": "Val", "guest_last_name": "Test",
+		"start":            "2025-01-01", "end": "2025-01-05",
+		"adults":           0, "children": 0,
+	}, "")
+	s.True(res3.Code == http.StatusBadRequest || res3.Code == http.StatusInternalServerError)
+}
+
 func TestReservationSuite(t *testing.T) {
 	suite.Run(t, new(ReservationSuite))
 }

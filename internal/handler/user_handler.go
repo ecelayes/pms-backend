@@ -30,6 +30,12 @@ func (h *UserHandler) Create(c echo.Context) error {
 
 	id, err := h.uc.CreateUser(c.Request().Context(), requesterRole, req)
 	if err != nil {
+		if errors.Is(err, entity.ErrInvalidInput) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		if errors.Is(err, entity.ErrConflict) {
+			return c.JSON(http.StatusConflict, map[string]string{"error": err.Error()})
+		}
 		if err.Error() == "only super_admin can create organization owners" {
 			return c.JSON(http.StatusForbidden, map[string]string{"error": err.Error()})
 		}
@@ -45,11 +51,42 @@ func (h *UserHandler) GetAll(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "organization_id query param required"})
 	}
 
-	users, err := h.uc.GetAll(c.Request().Context(), orgID)
+	var pagination entity.PaginationRequest
+	if err := c.Bind(&pagination); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid pagination params"})
+	}
+	if pagination.Page < 1 {
+		pagination.Page = 1
+	}
+	if pagination.Limit < 1 {
+		pagination.Limit = 10 
+	}
+
+	users, total, err := h.uc.GetAll(c.Request().Context(), orgID, pagination)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	return c.JSON(http.StatusOK, users)
+	
+	if users == nil {
+		users = []entity.User{}
+	}
+
+	totalPage := int(total) / pagination.Limit
+	if int(total)%pagination.Limit != 0 {
+		totalPage++
+	}
+
+	response := entity.PaginatedResponse[entity.User]{
+		Data: users,
+		Meta: entity.PaginationMeta{
+			Page:       pagination.Page,
+			Limit:      pagination.Limit,
+			TotalItems: total,
+			TotalPages: totalPage,
+		},
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 func (h *UserHandler) GetByID(c echo.Context) error {

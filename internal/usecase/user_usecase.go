@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -27,13 +28,16 @@ func NewUserUseCase(db *pgxpool.Pool, userRepo *repository.UserRepository, orgRe
 
 func (uc *UserUseCase) CreateUser(ctx context.Context, requesterRole string, req entity.CreateUserRequest) (string, error) {
 	if req.Email == "" || req.Password == "" {
-		return "", errors.New("email and password are required")
+		return "", entity.ErrInvalidInput
+	}
+	if !strings.Contains(req.Email, "@") {
+		return "", entity.ErrInvalidInput
 	}
 	if req.OrganizationID == "" {
-		return "", errors.New("organization_id is required")
+		return "", entity.ErrInvalidInput
 	}
 	if req.FirstName == "" || req.LastName == "" {
-		return "", errors.New("first_name and last_name are required")
+		return "", entity.ErrInvalidInput
 	}
 
 	switch req.Role {
@@ -48,7 +52,7 @@ func (uc *UserUseCase) CreateUser(ctx context.Context, requesterRole string, req
 		}
 	
 	default:
-		return "", errors.New("invalid target role")
+		return "", entity.ErrInvalidInput
 	}
 
 	passwordHash, err := auth.HashPassword(req.Password)
@@ -95,23 +99,29 @@ func (uc *UserUseCase) CreateUser(ctx context.Context, requesterRole string, req
 	return userID.String(), nil
 }
 
-func (uc *UserUseCase) GetAll(ctx context.Context, orgID string) ([]entity.User, error) {
+func (uc *UserUseCase) GetAll(ctx context.Context, orgID string, pagination entity.PaginationRequest) ([]entity.User, int64, error) {
 	if orgID == "" {
-		return nil, errors.New("organization_id is required")
+		return nil, 0, entity.ErrInvalidInput
 	}
-	return uc.userRepo.GetAllByOrganization(ctx, orgID)
+	return uc.userRepo.GetAllByOrganization(ctx, orgID, pagination)
 }
 
 func (uc *UserUseCase) GetByID(ctx context.Context, id string) (*entity.User, error) {
+	if _, err := uuid.Parse(id); err != nil {
+		return nil, entity.ErrRecordNotFound
+	}
 	return uc.userRepo.GetByID(ctx, id)
 }
 
 func (uc *UserUseCase) Update(ctx context.Context, id string, orgID string, req entity.UpdateUserRequest) error {
+	if _, err := uuid.Parse(id); err != nil {
+		return entity.ErrRecordNotFound
+	}
 	if req.Role != "" {
 		switch req.Role {
 		case entity.OrgRoleOwner, entity.OrgRoleManager, entity.OrgRoleStaff:
 		default:
-			return errors.New("invalid role: must be 'owner', 'manager' or 'staff'")
+			return entity.ErrInvalidInput
 		}
 	}
 
@@ -119,5 +129,8 @@ func (uc *UserUseCase) Update(ctx context.Context, id string, orgID string, req 
 }
 
 func (uc *UserUseCase) Delete(ctx context.Context, id string) error {
+	if _, err := uuid.Parse(id); err != nil {
+		return entity.ErrRecordNotFound
+	}
 	return uc.userRepo.Delete(ctx, id)
 }

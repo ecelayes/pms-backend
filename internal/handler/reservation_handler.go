@@ -34,7 +34,8 @@ func (h *ReservationHandler) Create(c echo.Context) error {
 	if err != nil {
 		switch {
 		case errors.Is(err, entity.ErrInvalidDateFormat), 
-		     errors.Is(err, entity.ErrInvalidDateRange):
+		     errors.Is(err, entity.ErrInvalidDateRange),
+		     errors.Is(err, entity.ErrInvalidInput):
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		case errors.Is(err, entity.ErrNoAvailability):
 			return c.JSON(http.StatusConflict, map[string]string{"error": err.Error()})
