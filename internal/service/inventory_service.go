@@ -27,7 +27,7 @@ func (s *InventoryService) ResolveRuleConflicts(existingRules []entity.PriceRule
 		if existing.Start.Before(newRule.Start) {
 			leftFragment := entity.PriceRule{
 				BaseEntity: existing.BaseEntity,
-				RoomTypeID: existing.RoomTypeID,
+				UnitTypeID: existing.UnitTypeID,
 				Start:      existing.Start,
 				End:        newRule.Start,
 				Price:      existing.Price,
@@ -38,7 +38,7 @@ func (s *InventoryService) ResolveRuleConflicts(existingRules []entity.PriceRule
 		if existing.End.After(newRule.End) {
 			rightFragment := entity.PriceRule{
 				BaseEntity: existing.BaseEntity,
-				RoomTypeID: existing.RoomTypeID,
+				UnitTypeID: existing.UnitTypeID,
 				Start:      newRule.End,
 				End:        existing.End,
 				Price:      existing.Price,

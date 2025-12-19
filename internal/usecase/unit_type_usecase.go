@@ -10,16 +10,16 @@ import (
 	"github.com/ecelayes/pms-backend/internal/repository"
 )
 
-type RoomUseCase struct {
-	repo *repository.RoomRepository
+type UnitTypeUseCase struct {
+	repo *repository.UnitTypeRepository
 }
 
-func NewRoomUseCase(repo *repository.RoomRepository) *RoomUseCase {
-	return &RoomUseCase{repo: repo}
+func NewUnitTypeUseCase(repo *repository.UnitTypeRepository) *UnitTypeUseCase {
+	return &UnitTypeUseCase{repo: repo}
 }
 
-func (uc *RoomUseCase) Create(ctx context.Context, req entity.CreateRoomTypeRequest) (string, error) {
-	if req.HotelID == "" || req.Name == "" {
+func (uc *UnitTypeUseCase) Create(ctx context.Context, req entity.CreateUnitTypeRequest) (string, error) {
+	if req.PropertyID == "" || req.Name == "" {
 		return "", entity.ErrInvalidInput
 	}
 	if len(req.Code) != 3 {
@@ -43,11 +43,11 @@ func (uc *RoomUseCase) Create(ctx context.Context, req entity.CreateRoomTypeRequ
 		return "", fmt.Errorf("failed to generate uuid v7: %w", err)
 	}
 
-	rt := entity.RoomType{
+	ut := entity.UnitType{
 		BaseEntity: entity.BaseEntity{
 			ID: newID.String(),
 		},
-		HotelID:       req.HotelID,
+		PropertyID:    req.PropertyID,
 		Name:          req.Name,
 		Code:          strings.ToUpper(req.Code),
 		TotalQuantity: req.TotalQuantity,
@@ -58,24 +58,24 @@ func (uc *RoomUseCase) Create(ctx context.Context, req entity.CreateRoomTypeRequ
 		Amenities:     req.Amenities,
 	}
 
-	return uc.repo.CreateRoomType(ctx, rt)
+	return uc.repo.Create(ctx, ut)
 }
 
-func (uc *RoomUseCase) ListByHotel(ctx context.Context, hotelID string, pagination entity.PaginationRequest) ([]entity.RoomType, int64, error) {
-	if hotelID == "" {
+func (uc *UnitTypeUseCase) ListByProperty(ctx context.Context, propertyID string, pagination entity.PaginationRequest) ([]entity.UnitType, int64, error) {
+	if propertyID == "" {
 		return nil, 0, entity.ErrInvalidInput
 	}
-	return uc.repo.ListByHotel(ctx, hotelID, pagination)
+	return uc.repo.ListByProperty(ctx, propertyID, pagination)
 }
 
-func (uc *RoomUseCase) GetByID(ctx context.Context, id string) (*entity.RoomType, error) {
+func (uc *UnitTypeUseCase) GetByID(ctx context.Context, id string) (*entity.UnitType, error) {
 	if _, err := uuid.Parse(id); err != nil {
 		return nil, entity.ErrRecordNotFound
 	}
 	return uc.repo.GetByID(ctx, id)
 }
 
-func (uc *RoomUseCase) Update(ctx context.Context, id string, req entity.UpdateRoomTypeRequest) error {
+func (uc *UnitTypeUseCase) Update(ctx context.Context, id string, req entity.UpdateUnitTypeRequest) error {
 	if _, err := uuid.Parse(id); err != nil {
 		return entity.ErrRecordNotFound
 	}
@@ -102,7 +102,7 @@ func (uc *RoomUseCase) Update(ctx context.Context, id string, req entity.UpdateR
 	return uc.repo.Update(ctx, id, req)
 }
 
-func (uc *RoomUseCase) Delete(ctx context.Context, id string) error {
+func (uc *UnitTypeUseCase) Delete(ctx context.Context, id string) error {
 	if _, err := uuid.Parse(id); err != nil {
 		return entity.ErrRecordNotFound
 	}

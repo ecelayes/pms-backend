@@ -35,7 +35,7 @@ func (s *BaseSuite) SetupSuite() {
 func (s *BaseSuite) TearDownSuite() { s.db.Close() }
 
 func (s *BaseSuite) SetupTest() {
-	tables := []string{"reservations", "price_rules", "room_types", "hotels", "hotel_services", "amenities", "organization_members", "users", "organizations", "guests"}
+	tables := []string{"reservations", "price_rules", "unit_types", "properties", "hotel_services", "amenities", "organization_members", "users", "organizations", "guests"}
 	for _, table := range tables {
 		s.db.Exec(context.Background(), fmt.Sprintf("TRUNCATE TABLE %s CASCADE", table))
 	}

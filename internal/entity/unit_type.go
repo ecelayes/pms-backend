@@ -1,9 +1,9 @@
 package entity
 
-type RoomType struct {
+type UnitType struct {
 	BaseEntity
 	
-	HotelID       string   `json:"hotel_id"`
+	PropertyID     string   `json:"property_id"`
 	Name          string   `json:"name"`
 	Code          string   `json:"code"`
 	TotalQuantity int      `json:"total_quantity"`
@@ -17,8 +17,8 @@ type RoomType struct {
 	Amenities     []string `json:"amenities"`
 }
 
-type CreateRoomTypeRequest struct {
-	HotelID       string   `json:"hotel_id"`
+type CreateUnitTypeRequest struct {
+	PropertyID     string   `json:"property_id"`
 	Name          string   `json:"name"`
 	Code          string   `json:"code"`
 	TotalQuantity int      `json:"total_quantity"`
@@ -29,7 +29,7 @@ type CreateRoomTypeRequest struct {
 	Amenities     []string `json:"amenities"`
 }
 
-type UpdateRoomTypeRequest struct {
+type UpdateUnitTypeRequest struct {
 	Name string `json:"name"`
 	Code string `json:"code"`
 

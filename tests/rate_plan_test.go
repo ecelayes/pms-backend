@@ -13,25 +13,26 @@ type RatePlanSuite struct {
 	BaseSuite
 	token      string
 	orgID      string
-	hotelID    string
-	roomTypeID string
+	propertyID string
+	unitTypeID string
 }
 
 func (s *RatePlanSuite) SetupTest() {
 	s.BaseSuite.SetupTest()
 	s.token, s.orgID = s.GetAdminTokenAndOrg()
 
-	resH := s.MakeRequest("POST", "/api/v1/hotels", map[string]string{
+	resH := s.MakeRequest("POST", "/api/v1/properties", map[string]string{
 		"organization_id": s.orgID,
-		"name":            "RatePlan Hotel",
+		"name":            "RatePlan Property",
 		"code":            "RPH",
+		"type":            "HOTEL",
 	}, s.token)
 	var dataH map[string]string
 	json.Unmarshal(resH.Body.Bytes(), &dataH)
-	s.hotelID = dataH["hotel_id"]
+	s.propertyID = dataH["property_id"]
 
-	resR := s.MakeRequest("POST", "/api/v1/room-types", map[string]interface{}{
-		"hotel_id":       s.hotelID,
+	resR := s.MakeRequest("POST", "/api/v1/unit-types", map[string]interface{}{
+		"property_id":    s.propertyID,
 		"name":           "Deluxe",
 		"code":           "DLX",
 		"total_quantity": 10,
@@ -40,10 +41,10 @@ func (s *RatePlanSuite) SetupTest() {
 	}, s.token)
 	var dataR map[string]string
 	json.Unmarshal(resR.Body.Bytes(), &dataR)
-	s.roomTypeID = dataR["room_type_id"]
+	s.unitTypeID = dataR["unit_type_id"]
 
 	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
-		"room_type_id": s.roomTypeID,
+		"unit_type_id": s.unitTypeID,
 		"start": "2026-01-01", "end": "2026-01-31",
         "price": 100.0,
 	}, s.token)
@@ -51,8 +52,8 @@ func (s *RatePlanSuite) SetupTest() {
 
 func (s *RatePlanSuite) TestRatePlanLifecycle() {
 	reqBody := map[string]interface{}{
-		"hotel_id":     s.hotelID,
-		"room_type_id": s.roomTypeID,
+		"property_id":  s.propertyID,
+		"unit_type_id": s.unitTypeID,
 		"name":         "Breakfast Included",
 		"description":  "Bed and Breakfast",
 		"meal_plan": map[string]interface{}{
@@ -78,7 +79,7 @@ func (s *RatePlanSuite) TestRatePlanLifecycle() {
 	json.Unmarshal(res.Body.Bytes(), &data)
 	planID := data["rate_plan_id"]
 
-	resList := s.MakeRequest("GET", "/api/v1/rate-plans?hotel_id="+s.hotelID, nil, s.token)
+	resList := s.MakeRequest("GET", "/api/v1/rate-plans?property_id="+s.propertyID, nil, s.token)
 	s.Equal(http.StatusOK, resList.Code)
 	
 	var response entity.PaginatedResponse[entity.RatePlan]
@@ -103,7 +104,7 @@ func (s *RatePlanSuite) TestRatePlanLifecycle() {
 	s.Equal(http.StatusOK, resUpdate.Code)
 
 	resRes := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
-		"room_type_id":     s.roomTypeID,
+		"unit_type_id":     s.unitTypeID,
 		"rate_plan_id":     planID,
 		"guest_email":      "check@integrity.com",
 		"guest_first_name": "Integrity", "guest_last_name": "Check",
@@ -133,8 +134,8 @@ func (s *RatePlanSuite) TestRatePlanLifecycle() {
 
 func (s *RatePlanSuite) TestRatePlanValidation() {
 	res := s.MakeRequest("POST", "/api/v1/rate-plans", map[string]interface{}{
-		"hotel_id":     s.hotelID,
-		"room_type_id": s.roomTypeID,
+		"property_id":  s.propertyID,
+		"unit_type_id": s.unitTypeID,
 		"name":         "",
 		"meal_plan": map[string]interface{}{
 			"included": true, "price_per_pax": 10.0,
@@ -143,8 +144,8 @@ func (s *RatePlanSuite) TestRatePlanValidation() {
 	s.Equal(http.StatusBadRequest, res.Code)
 
 	res2 := s.MakeRequest("POST", "/api/v1/rate-plans", map[string]interface{}{
-		"hotel_id":     s.hotelID,
-		"room_type_id": s.roomTypeID,
+		"property_id":  s.propertyID,
+		"unit_type_id": s.unitTypeID,
 		"name":         "Invalid Policy",
 		"cancellation_policy": map[string]interface{}{
 			"is_refundable": false,

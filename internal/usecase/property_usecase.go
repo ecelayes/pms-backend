@@ -10,15 +10,15 @@ import (
 	"github.com/ecelayes/pms-backend/internal/repository"
 )
 
-type HotelUseCase struct {
-	repo *repository.HotelRepository
+type PropertyUseCase struct {
+	repo *repository.PropertyRepository
 }
 
-func NewHotelUseCase(repo *repository.HotelRepository) *HotelUseCase {
-	return &HotelUseCase{repo: repo}
+func NewPropertyUseCase(repo *repository.PropertyRepository) *PropertyUseCase {
+	return &PropertyUseCase{repo: repo}
 }
 
-func (uc *HotelUseCase) Create(ctx context.Context, req entity.CreateHotelRequest) (string, error) {
+func (uc *PropertyUseCase) Create(ctx context.Context, req entity.CreatePropertyRequest) (string, error) {
 	if req.OrganizationID == "" {
 		return "", entity.ErrInvalidInput
 	}
@@ -29,42 +29,46 @@ func (uc *HotelUseCase) Create(ctx context.Context, req entity.CreateHotelReques
 		return "", entity.ErrInvalidInput
 	}
 	
-	hotelID, err := uuid.NewV7()
+	propertyID, err := uuid.NewV7()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate uuid v7: %w", err)
 	}
 
-	hotel := entity.Hotel{
+	property := entity.Property{
 		BaseEntity: entity.BaseEntity{
-			ID: hotelID.String(),
+			ID: propertyID.String(),
 		},
 		OrganizationID: req.OrganizationID, 
 		Name:           req.Name,
 		Code:           strings.ToUpper(req.Code),
+		Type:           req.Type,
+	}
+	if property.Type == "" {
+		property.Type = "HOTEL"
 	}
 
-	return uc.repo.Create(ctx, hotel)
+	return uc.repo.Create(ctx, property)
 }
 
-func (uc *HotelUseCase) ListByOrganization(ctx context.Context, orgID string, pagination entity.PaginationRequest) ([]entity.Hotel, int64, error) {
+func (uc *PropertyUseCase) ListByOrganization(ctx context.Context, orgID string, pagination entity.PaginationRequest) ([]entity.Property, int64, error) {
 	if orgID == "" {
 		return nil, 0, entity.ErrInvalidInput
 	}
 	return uc.repo.ListByOrganization(ctx, orgID, pagination)
 }
 
-func (uc *HotelUseCase) GetByID(ctx context.Context, id string) (*entity.Hotel, error) {
+func (uc *PropertyUseCase) GetByID(ctx context.Context, id string) (*entity.Property, error) {
 	if _, err := uuid.Parse(id); err != nil {
 		return nil, entity.ErrRecordNotFound
 	}
 	return uc.repo.GetByID(ctx, id)
 }
 
-func (uc *HotelUseCase) Update(ctx context.Context, id string, req entity.UpdateHotelRequest) error {
+func (uc *PropertyUseCase) Update(ctx context.Context, id string, req entity.UpdatePropertyRequest) error {
 	if _, err := uuid.Parse(id); err != nil {
 		return entity.ErrRecordNotFound
 	}
-	if req.Name == "" && req.Code == "" {
+	if req.Name == "" && req.Code == "" && req.Type == "" {
 		return entity.ErrInvalidInput
 	}
 	if req.Code != "" {
@@ -73,7 +77,7 @@ func (uc *HotelUseCase) Update(ctx context.Context, id string, req entity.Update
 	return uc.repo.Update(ctx, id, req)
 }
 
-func (uc *HotelUseCase) Delete(ctx context.Context, id string) error {
+func (uc *PropertyUseCase) Delete(ctx context.Context, id string) error {
 	if _, err := uuid.Parse(id); err != nil {
 		return entity.ErrRecordNotFound
 	}

@@ -22,7 +22,7 @@ func NewAvailabilityHandler(uc *usecase.AvailabilityUseCase) *AvailabilityHandle
 func (h *AvailabilityHandler) Get(c echo.Context) error {
 	startStr := c.QueryParam("start")
 	endStr := c.QueryParam("end")
-	hotelID := c.QueryParam("hotel_id")
+	propertyID := c.QueryParam("property_id")
 	
 	roomsStr := c.QueryParam("rooms")
 	adultsStr := c.QueryParam("adults")
@@ -63,7 +63,7 @@ func (h *AvailabilityHandler) Get(c echo.Context) error {
 	filter := entity.AvailabilityFilter{
 		Start:    start,
 		End:      end,
-		HotelID:  hotelID,
+		PropertyID:  propertyID,
 		Rooms:    rooms,
 		Adults:   adults,
 		Children: children,

@@ -21,7 +21,7 @@ var (
 	ErrPriorityNegative = errors.New("priority cannot be negative")
 
 	// Integrity
-	ErrRoomTypeNotFound = errors.New("room type ID does not exist")
+	ErrUnitTypeNotFound = errors.New("unit type ID does not exist")
 
 	// Auth
 	ErrEmailAlreadyExists = errors.New("email is already registered")

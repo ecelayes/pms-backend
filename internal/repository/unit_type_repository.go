@@ -12,27 +12,28 @@ import (
 	"github.com/ecelayes/pms-backend/internal/entity"
 )
 
-type RoomRepository struct {
+type UnitTypeRepository struct {
 	db *pgxpool.Pool
 }
 
-func NewRoomRepository(db *pgxpool.Pool) *RoomRepository {
-	return &RoomRepository{db: db}
+func NewUnitTypeRepository(db *pgxpool.Pool) *UnitTypeRepository {
+	return &UnitTypeRepository{db: db}
 }
 
-func (r *RoomRepository) CreateRoomType(ctx context.Context, rt entity.RoomType) (string, error) {
+func (r *UnitTypeRepository) Create(ctx context.Context, ut entity.UnitType) (string, error) {
 	query := `
-		INSERT INTO room_types (
-			hotel_id, name, code, total_quantity, base_price, 
-			max_occupancy, max_adults, max_children, amenities
+		INSERT INTO unit_types (
+			property_id, name, code, total_quantity, base_price, 
+			max_occupancy, max_adults, max_children, amenities,
+			created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
 		RETURNING id
 	`
 	var id string
 	err := r.db.QueryRow(ctx, query, 
-		rt.HotelID, rt.Name, rt.Code, rt.TotalQuantity, rt.BasePrice,
-		rt.MaxOccupancy, rt.MaxAdults, rt.MaxChildren, rt.Amenities,
+		ut.PropertyID, ut.Name, ut.Code, ut.TotalQuantity, ut.BasePrice,
+		ut.MaxOccupancy, ut.MaxAdults, ut.MaxChildren, ut.Amenities,
 	).Scan(&id)
 	
 	if err != nil {
@@ -40,135 +41,135 @@ func (r *RoomRepository) CreateRoomType(ctx context.Context, rt entity.RoomType)
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return "", entity.ErrConflict
 		}
-		return "", fmt.Errorf("create room type: %w", err)
+		return "", fmt.Errorf("create unit type: %w", err)
 	}
 	return id, nil
 }
 
-func (r *RoomRepository) GetAll(ctx context.Context) ([]entity.RoomType, error) {
+func (r *UnitTypeRepository) GetAll(ctx context.Context) ([]entity.UnitType, error) {
 	query := `
-		SELECT id, hotel_id, name, code, total_quantity, base_price,
+		SELECT id, property_id, name, code, total_quantity, base_price,
 		       max_occupancy, max_adults, max_children, amenities, 
 		       created_at, updated_at
-		FROM room_types
+		FROM unit_types
 		WHERE deleted_at IS NULL
 	`
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("get all room types: %w", err)
+		return nil, fmt.Errorf("get all unit types: %w", err)
 	}
 	defer rows.Close()
 
-	var rooms []entity.RoomType
+	var unitTypes []entity.UnitType
 	for rows.Next() {
-		var rt entity.RoomType
+		var ut entity.UnitType
 		err := rows.Scan(
-			&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity, &rt.BasePrice,
-			&rt.MaxOccupancy, &rt.MaxAdults, &rt.MaxChildren, &rt.Amenities,
-			&rt.CreatedAt, &rt.UpdatedAt,
+			&ut.ID, &ut.PropertyID, &ut.Name, &ut.Code, &ut.TotalQuantity, &ut.BasePrice,
+			&ut.MaxOccupancy, &ut.MaxAdults, &ut.MaxChildren, &ut.Amenities,
+			&ut.CreatedAt, &ut.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
 		}
-		rooms = append(rooms, rt)
+		unitTypes = append(unitTypes, ut)
 	}
-	return rooms, nil
+	return unitTypes, nil
 }
 
-func (r *RoomRepository) GetByID(ctx context.Context, id string) (*entity.RoomType, error) {
+func (r *UnitTypeRepository) GetByID(ctx context.Context, id string) (*entity.UnitType, error) {
 	query := `
-		SELECT id, hotel_id, name, code, total_quantity, base_price,
+		SELECT id, property_id, name, code, total_quantity, base_price,
 		       max_occupancy, max_adults, max_children, amenities, 
 		       created_at, updated_at
-		FROM room_types
+		FROM unit_types
 		WHERE id = $1 AND deleted_at IS NULL
 	`
-	var rt entity.RoomType
+	var ut entity.UnitType
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity, &rt.BasePrice,
-		&rt.MaxOccupancy, &rt.MaxAdults, &rt.MaxChildren, &rt.Amenities,
-		&rt.CreatedAt, &rt.UpdatedAt,
+		&ut.ID, &ut.PropertyID, &ut.Name, &ut.Code, &ut.TotalQuantity, &ut.BasePrice,
+		&ut.MaxOccupancy, &ut.MaxAdults, &ut.MaxChildren, &ut.Amenities,
+		&ut.CreatedAt, &ut.UpdatedAt,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, entity.ErrRecordNotFound
 		}
-		return nil, fmt.Errorf("get room type: %w", err)
+		return nil, fmt.Errorf("get unit type: %w", err)
 	}
-	return &rt, nil
+	return &ut, nil
 }
 
-func (r *RoomRepository) GetByIDLocked(ctx context.Context, tx pgx.Tx, id string) (*entity.RoomType, error) {
+func (r *UnitTypeRepository) GetByIDLocked(ctx context.Context, tx pgx.Tx, id string) (*entity.UnitType, error) {
 	query := `
-		SELECT id, hotel_id, name, code, total_quantity, base_price,
+		SELECT id, property_id, name, code, total_quantity, base_price,
 		       max_occupancy, max_adults, max_children, amenities, 
 		       created_at, updated_at
-		FROM room_types
+		FROM unit_types
 		WHERE id = $1 AND deleted_at IS NULL
-		FOR UPDATE -- <--- LA CLAVE MÁGICA
+		FOR UPDATE
 	`
-	var rt entity.RoomType
+	var ut entity.UnitType
 	err := tx.QueryRow(ctx, query, id).Scan(
-		&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity, &rt.BasePrice,
-		&rt.MaxOccupancy, &rt.MaxAdults, &rt.MaxChildren, &rt.Amenities,
-		&rt.CreatedAt, &rt.UpdatedAt,
+		&ut.ID, &ut.PropertyID, &ut.Name, &ut.Code, &ut.TotalQuantity, &ut.BasePrice,
+		&ut.MaxOccupancy, &ut.MaxAdults, &ut.MaxChildren, &ut.Amenities,
+		&ut.CreatedAt, &ut.UpdatedAt,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, entity.ErrRecordNotFound
 		}
-		return nil, fmt.Errorf("get room type locked: %w", err)
+		return nil, fmt.Errorf("get unit type locked: %w", err)
 	}
-	return &rt, nil
+	return &ut, nil
 }
 
-func (r *RoomRepository) ListByHotel(ctx context.Context, hotelID string, pagination entity.PaginationRequest) ([]entity.RoomType, int64, error) {
+func (r *UnitTypeRepository) ListByProperty(ctx context.Context, propertyID string, pagination entity.PaginationRequest) ([]entity.UnitType, int64, error) {
 	countQuery := `
 		SELECT COUNT(*)
-		FROM room_types
-		WHERE hotel_id = $1 AND deleted_at IS NULL
+		FROM unit_types
+		WHERE property_id = $1 AND deleted_at IS NULL
 	`
 	var total int64
-	if err := r.db.QueryRow(ctx, countQuery, hotelID).Scan(&total); err != nil {
-		return nil, 0, fmt.Errorf("count room types: %w", err)
+	if err := r.db.QueryRow(ctx, countQuery, propertyID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count unit types: %w", err)
 	}
 
 	query := `
-		SELECT id, hotel_id, name, code, total_quantity, base_price,
+		SELECT id, property_id, name, code, total_quantity, base_price,
 		       max_occupancy, max_adults, max_children, amenities, 
 		       created_at, updated_at
-		FROM room_types
-		WHERE hotel_id = $1 AND deleted_at IS NULL
+		FROM unit_types
+		WHERE property_id = $1 AND deleted_at IS NULL
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3
 	`
 	
 	offset := (pagination.Page - 1) * pagination.Limit
 	
-	rows, err := r.db.Query(ctx, query, hotelID, pagination.Limit, offset)
+	rows, err := r.db.Query(ctx, query, propertyID, pagination.Limit, offset)
 	if err != nil {
-		return nil, 0, fmt.Errorf("list room types: %w", err)
+		return nil, 0, fmt.Errorf("list unit types: %w", err)
 	}
 	defer rows.Close()
 
-	var rooms []entity.RoomType
+	var unitTypes []entity.UnitType
 	for rows.Next() {
-		var rt entity.RoomType
+		var ut entity.UnitType
 		err := rows.Scan(
-			&rt.ID, &rt.HotelID, &rt.Name, &rt.Code, &rt.TotalQuantity, &rt.BasePrice,
-			&rt.MaxOccupancy, &rt.MaxAdults, &rt.MaxChildren, &rt.Amenities,
-			&rt.CreatedAt, &rt.UpdatedAt,
+			&ut.ID, &ut.PropertyID, &ut.Name, &ut.Code, &ut.TotalQuantity, &ut.BasePrice,
+			&ut.MaxOccupancy, &ut.MaxAdults, &ut.MaxChildren, &ut.Amenities,
+			&ut.CreatedAt, &ut.UpdatedAt,
 		)
 		if err != nil {
 			return nil, 0, err
 		}
-		rooms = append(rooms, rt)
+		unitTypes = append(unitTypes, ut)
 	}
-	return rooms, total, nil
+	return unitTypes, total, nil
 }
 
-func (r *RoomRepository) Update(ctx context.Context, id string, req entity.UpdateRoomTypeRequest) error {
-	query := `UPDATE room_types SET updated_at = NOW()`
+func (r *UnitTypeRepository) Update(ctx context.Context, id string, req entity.UpdateUnitTypeRequest) error {
+	query := `UPDATE unit_types SET updated_at = NOW()`
 	args := []interface{}{}
 	argID := 1
 
@@ -229,7 +230,7 @@ func (r *RoomRepository) Update(ctx context.Context, id string, req entity.Updat
 
 	cmd, err := r.db.Exec(ctx, query, args...)
 	if err != nil {
-		return fmt.Errorf("update room type: %w", err)
+		return fmt.Errorf("update unit type: %w", err)
 	}
 	if cmd.RowsAffected() == 0 {
 		return entity.ErrRecordNotFound
@@ -238,11 +239,11 @@ func (r *RoomRepository) Update(ctx context.Context, id string, req entity.Updat
 	return nil
 }
 
-func (r *RoomRepository) Delete(ctx context.Context, id string) error {
-	query := `UPDATE room_types SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`
+func (r *UnitTypeRepository) Delete(ctx context.Context, id string) error {
+	query := `UPDATE unit_types SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`
 	cmd, err := r.db.Exec(ctx, query, id)
 	if err != nil {
-		return fmt.Errorf("delete room type: %w", err)
+		return fmt.Errorf("delete unit type: %w", err)
 	}
 	if cmd.RowsAffected() == 0 {
 		return entity.ErrRecordNotFound
@@ -250,42 +251,42 @@ func (r *RoomRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-func (r *RoomRepository) GetCodesForGeneration(ctx context.Context, roomTypeID string) (string, string, error) {
+func (r *UnitTypeRepository) GetCodesForGeneration(ctx context.Context, unitTypeID string) (string, string, error) {
 	query := `
-		SELECT h.code, rt.code
-		FROM room_types rt
-		JOIN hotels h ON rt.hotel_id = h.id
-		WHERE rt.id = $1 AND rt.deleted_at IS NULL AND h.deleted_at IS NULL
+		SELECT p.code, ut.code
+		FROM unit_types ut
+		JOIN properties p ON ut.property_id = p.id
+		WHERE ut.id = $1 AND ut.deleted_at IS NULL AND p.deleted_at IS NULL
 	`
-	var hotelCode, roomCode string
-	err := r.db.QueryRow(ctx, query, roomTypeID).Scan(&hotelCode, &roomCode)
+	var propertyCode, unitTypeCode string
+	err := r.db.QueryRow(ctx, query, unitTypeID).Scan(&propertyCode, &unitTypeCode)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to fetch codes: %w", err)
 	}
-	return hotelCode, roomCode, nil
+	return propertyCode, unitTypeCode, nil
 }
 
-func (r *RoomRepository) CountReservations(ctx context.Context, db DBTX, roomTypeID string, start, end time.Time) (int, error) {
+func (r *UnitTypeRepository) CountReservations(ctx context.Context, db DBTX, unitTypeID string, start, end time.Time) (int, error) {
 	var querier DBTX = db
 	if querier == nil {
 		querier = r.db
 	}
 	query := `
 		SELECT COUNT(*) FROM reservations 
-		WHERE room_type_id = $1 
+		WHERE unit_type_id = $1 
 		AND status = 'confirmed' 
 		AND deleted_at IS NULL
 		AND stay_range && daterange($2::date, $3::date)
 	`
 	var count int
-	err := querier.QueryRow(ctx, query, roomTypeID, start, end).Scan(&count)
+	err := querier.QueryRow(ctx, query, unitTypeID, start, end).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("count reservations: %w", err)
 	}
 	return count, nil
 }
 
-func (r *RoomRepository) GetDailyPrices(ctx context.Context, roomTypeID string, start, end time.Time) ([]entity.DailyRate, error) {
+func (r *UnitTypeRepository) GetDailyPrices(ctx context.Context, unitTypeID string, start, end time.Time) ([]entity.DailyRate, error) {
 	query := `
 		WITH booking_days AS (
 			SELECT generate_series($2::date, $3::date - interval '1 day', '1 day')::date AS day
@@ -293,12 +294,12 @@ func (r *RoomRepository) GetDailyPrices(ctx context.Context, roomTypeID string, 
 		ranked_prices AS (
 			SELECT bd.day, pr.price, ROW_NUMBER() OVER (PARTITION BY bd.day ORDER BY pr.priority DESC) as rn
 			FROM booking_days bd
-			JOIN price_rules pr ON pr.room_type_id = $1 AND pr.validity_range @> bd.day
+			JOIN price_rules pr ON pr.unit_type_id = $1 AND pr.validity_range @> bd.day
 			WHERE pr.deleted_at IS NULL
 		)
 		SELECT day::text, price FROM ranked_prices WHERE rn = 1 ORDER BY day;
 	`
-	rows, err := r.db.Query(ctx, query, roomTypeID, start, end)
+	rows, err := r.db.Query(ctx, query, unitTypeID, start, end)
 	if err != nil {
 		return nil, fmt.Errorf("calc prices: %w", err)
 	}

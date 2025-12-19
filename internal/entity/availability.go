@@ -3,7 +3,7 @@ package entity
 import "time"
 
 type AvailabilityFilter struct {
-	HotelID  string    `json:"hotel_id"`
+	PropertyID  string    `json:"property_id"`
 	Start    time.Time `json:"start"`
 	End      time.Time `json:"end"`
 	Adults   int       `json:"adults"`
@@ -30,8 +30,8 @@ type RateOption struct {
 }
 
 type AvailabilitySearch struct {
-	RoomTypeID   string      `json:"room_type_id"`
-	RoomTypeName string      `json:"room_type_name"`
+	UnitTypeID   string      `json:"unit_type_id"`
+	UnitTypeName string      `json:"unit_type_name"`
 	AvailableQty int         `json:"available_qty"`
 	MaxOccupancy int         `json:"max_occupancy"`
 	MaxAdults    int         `json:"max_adults"`

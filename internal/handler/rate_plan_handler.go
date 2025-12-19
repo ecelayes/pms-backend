@@ -35,9 +35,9 @@ func (h *RatePlanHandler) Create(c echo.Context) error {
 }
 
 func (h *RatePlanHandler) List(c echo.Context) error {
-	hotelID := c.QueryParam("hotel_id")
-	if hotelID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "hotel_id is required"})
+	propertyID := c.QueryParam("property_id")
+	if propertyID == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "property_id is required"})
 	}
 
 	var pagination entity.PaginationRequest
@@ -51,7 +51,7 @@ func (h *RatePlanHandler) List(c echo.Context) error {
 		pagination.Limit = 10 
 	}
 
-	plans, total, err := h.uc.ListByHotel(c.Request().Context(), hotelID, pagination)
+	plans, total, err := h.uc.ListByProperty(c.Request().Context(), propertyID, pagination)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}

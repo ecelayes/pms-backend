@@ -14,8 +14,8 @@ type LifecycleSuite struct {
 	superToken string
 	ownerToken string
 	orgID      string
-	hotelID    string
-	roomID     string
+	propertyID string
+	unitTypeID string
 	ratePlanID string
 }
 
@@ -24,7 +24,7 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 
 	s.Run("1. Create Organization", func() {
 		res := s.MakeRequest("POST", "/api/v1/organizations", map[string]string{
-			"name": "Global Hotels Corp",
+			"name": "Global Properties Corp",
 		}, s.superToken)
 		s.Equal(http.StatusCreated, res.Code)
 		var data map[string]string
@@ -56,22 +56,23 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 		s.ownerToken = data["token"]
 	})
 
-	s.Run("4. Create Hotel", func() {
-		res := s.MakeRequest("POST", "/api/v1/hotels", map[string]string{
+	s.Run("4. Create Property", func() {
+		res := s.MakeRequest("POST", "/api/v1/properties", map[string]string{
 			"organization_id": s.orgID,
 			"name":            "Grand Global",
 			"code":            "GLB",
+			"type":            "HOTEL",
 		}, s.ownerToken)
 		
 		s.Equal(http.StatusCreated, res.Code)
 		var data map[string]string
 		json.Unmarshal(res.Body.Bytes(), &data)
-		s.hotelID = data["hotel_id"]
+		s.propertyID = data["property_id"]
 	})
 
-	s.Run("5. Create Room", func() {
-		res := s.MakeRequest("POST", "/api/v1/room-types", map[string]interface{}{
-			"hotel_id":       s.hotelID,
+	s.Run("5. Create UnitType", func() {
+		res := s.MakeRequest("POST", "/api/v1/unit-types", map[string]interface{}{
+			"property_id":    s.propertyID,
 			"name":           "Suite",
 			"code":           "SUI",
 			"total_quantity": 10,
@@ -82,12 +83,12 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 		s.Equal(http.StatusCreated, res.Code)
 		var data map[string]string
 		json.Unmarshal(res.Body.Bytes(), &data)
-		s.roomID = data["room_type_id"]
+		s.unitTypeID = data["unit_type_id"]
 	})
 
 	s.Run("6. Set Pricing (Base Rate)", func() {
 		res := s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
-			"room_type_id": s.roomID,
+			"unit_type_id": s.unitTypeID,
 			"start": "2025-10-01", "end": "2025-10-10", 
 			"price": 200.0,
 		}, s.ownerToken)
@@ -96,8 +97,8 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 
 	s.Run("7. Create Rate Plan (Bed & Breakfast)", func() {
 		reqBody := map[string]interface{}{
-			"hotel_id":     s.hotelID,
-			"room_type_id": s.roomID,
+			"property_id":  s.propertyID,
+			"unit_type_id": s.unitTypeID,
 			"name":         "Bed & Breakfast",
 			"description":  "Standard rate with breakfast included",
 			"meal_plan": map[string]interface{}{
@@ -124,7 +125,7 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 
 	s.Run("8. Customer Reservation with Rate Plan", func() {
 		res := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
-			"room_type_id":     s.roomID,
+			"unit_type_id":     s.unitTypeID,
 			"rate_plan_id":     s.ratePlanID,
 			"guest_email":      "client@mail.com",
 			"guest_first_name": "Client", "guest_last_name": "One",

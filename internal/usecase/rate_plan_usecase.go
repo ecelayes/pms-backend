@@ -23,7 +23,7 @@ func NewRatePlanUseCase(repo *repository.RatePlanRepository, resRepo *repository
 }
 
 func (uc *RatePlanUseCase) Create(ctx context.Context, req entity.CreateRatePlanRequest) (string, error) {
-	if req.HotelID == "" || req.Name == "" {
+	if req.PropertyID == "" || req.Name == "" {
 		return "", entity.ErrInvalidInput
 	}
 
@@ -38,8 +38,8 @@ func (uc *RatePlanUseCase) Create(ctx context.Context, req entity.CreateRatePlan
 
 	plan := entity.RatePlan{
 		BaseEntity:         entity.BaseEntity{ID: id.String()},
-		HotelID:            req.HotelID,
-		RoomTypeID:         req.RoomTypeID,
+		PropertyID:         req.PropertyID,
+		UnitTypeID:         req.UnitTypeID,
 		Name:               req.Name,
 		Description:        req.Description,
 		Active:             true,
@@ -55,8 +55,8 @@ func (uc *RatePlanUseCase) Create(ctx context.Context, req entity.CreateRatePlan
 	return id.String(), nil
 }
 
-func (uc *RatePlanUseCase) ListByHotel(ctx context.Context, hotelID string, pagination entity.PaginationRequest) ([]entity.RatePlan, int64, error) {
-	return uc.repo.ListByHotel(ctx, hotelID, pagination)
+func (uc *RatePlanUseCase) ListByProperty(ctx context.Context, propertyID string, pagination entity.PaginationRequest) ([]entity.RatePlan, int64, error) {
+	return uc.repo.ListByProperty(ctx, propertyID, pagination)
 }
 
 func (uc *RatePlanUseCase) GetByID(ctx context.Context, id string) (*entity.RatePlan, error) {

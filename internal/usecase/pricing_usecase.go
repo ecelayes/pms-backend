@@ -16,28 +16,28 @@ import (
 type PricingUseCase struct {
 	db             *pgxpool.Pool
 	priceRepo      *repository.PriceRepository
-	roomRepo       *repository.RoomRepository
+	unitTypeRepo   *repository.UnitTypeRepository
 	inventoryLogic *service.InventoryService
 }
 
 func NewPricingUseCase(
 	db *pgxpool.Pool,
 	priceRepo *repository.PriceRepository,
-	roomRepo *repository.RoomRepository,
+	unitTypeRepo *repository.UnitTypeRepository,
 	inventoryLogic *service.InventoryService,
 ) *PricingUseCase {
 	return &PricingUseCase{
 		db:             db,
 		priceRepo:      priceRepo,
-		roomRepo:       roomRepo,
+		unitTypeRepo:   unitTypeRepo,
 		inventoryLogic: inventoryLogic,
 	}
 }
 
 func (uc *PricingUseCase) BulkCreateRule(ctx context.Context, req entity.SetPriceRequest) error {
-	if _, err := uc.roomRepo.GetByID(ctx, req.RoomTypeID); err != nil {
+	if _, err := uc.unitTypeRepo.GetByID(ctx, req.UnitTypeID); err != nil {
 		if errors.Is(err, entity.ErrRecordNotFound) {
-			return entity.ErrRoomTypeNotFound
+			return entity.ErrUnitTypeNotFound
 		}
 		return err
 	}
@@ -59,13 +59,13 @@ func (uc *PricingUseCase) BulkCreateRule(ctx context.Context, req entity.SetPric
 	if err != nil { return err }
 	defer tx.Rollback(ctx)
 
-	existingRules, err := uc.priceRepo.GetOverlapping(ctx, tx, req.RoomTypeID, start, end)
+	existingRules, err := uc.priceRepo.GetOverlapping(ctx, tx, req.UnitTypeID, start, end)
 	if err != nil { return err }
 
 	newID, _ := uuid.NewV7()
 	targetRule := entity.PriceRule{
 		BaseEntity: entity.BaseEntity{ID: newID.String()},
-		RoomTypeID: req.RoomTypeID,
+		UnitTypeID: req.UnitTypeID,
 		Start:      start,
 		End:        end,
 		Price:      req.Price,
@@ -82,7 +82,7 @@ func (uc *PricingUseCase) BulkCreateRule(ctx context.Context, req entity.SetPric
 		if finalRules[i].ID == "" || finalRules[i].ID != targetRule.ID {
 			uid, _ := uuid.NewV7()
 			finalRules[i].ID = uid.String()
-			finalRules[i].RoomTypeID = req.RoomTypeID
+			finalRules[i].UnitTypeID = req.UnitTypeID
 		}
 	}
 
@@ -99,12 +99,12 @@ func (uc *PricingUseCase) DeleteRule(ctx context.Context, id string) error {
 	return uc.priceRepo.Delete(ctx, id)
 }
 
-func (uc *PricingUseCase) GetRules(ctx context.Context, roomTypeID, hotelID string, pagination entity.PaginationRequest) ([]entity.PriceRule, int64, error) {
-	if roomTypeID != "" {
-		return uc.priceRepo.ListByRoomType(ctx, roomTypeID, pagination)
+func (uc *PricingUseCase) GetRules(ctx context.Context, unitTypeID, propertyID string, pagination entity.PaginationRequest) ([]entity.PriceRule, int64, error) {
+	if unitTypeID != "" {
+		return uc.priceRepo.ListByUnitType(ctx, unitTypeID, pagination)
 	}
-	if hotelID != "" {
-		return uc.priceRepo.ListByHotel(ctx, hotelID, pagination)
+	if propertyID != "" {
+		return uc.priceRepo.ListByProperty(ctx, propertyID, pagination)
 	}
-	return nil, 0, fmt.Errorf("%w: room_type_id or hotel_id is required", entity.ErrInvalidInput)
+	return nil, 0, fmt.Errorf("%w: unit_type_id or property_id is required", entity.ErrInvalidInput)
 }

@@ -9,16 +9,16 @@ import (
 	"github.com/ecelayes/pms-backend/internal/usecase"
 )
 
-type HotelHandler struct {
-	uc *usecase.HotelUseCase
+type PropertyHandler struct {
+	uc *usecase.PropertyUseCase
 }
 
-func NewHotelHandler(uc *usecase.HotelUseCase) *HotelHandler {
-	return &HotelHandler{uc: uc}
+func NewPropertyHandler(uc *usecase.PropertyUseCase) *PropertyHandler {
+	return &PropertyHandler{uc: uc}
 }
 
-func (h *HotelHandler) Create(c echo.Context) error {
-	var req entity.CreateHotelRequest
+func (h *PropertyHandler) Create(c echo.Context) error {
+	var req entity.CreatePropertyRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
@@ -34,10 +34,10 @@ func (h *HotelHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
-	return c.JSON(http.StatusCreated, map[string]string{"hotel_id": id})
+	return c.JSON(http.StatusCreated, map[string]string{"property_id": id})
 }
 
-func (h *HotelHandler) GetAll(c echo.Context) error {
+func (h *PropertyHandler) GetAll(c echo.Context) error {
 	orgID := c.QueryParam("organization_id")
 	
 	var pagination entity.PaginationRequest
@@ -51,7 +51,7 @@ func (h *HotelHandler) GetAll(c echo.Context) error {
 		pagination.Limit = 10 
 	}
 
-	hotels, total, err := h.uc.ListByOrganization(c.Request().Context(), orgID, pagination)
+	properties, total, err := h.uc.ListByOrganization(c.Request().Context(), orgID, pagination)
 	if err != nil {
 		if errors.Is(err, entity.ErrInvalidInput) {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -59,8 +59,8 @@ func (h *HotelHandler) GetAll(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	
-	if hotels == nil {
-		hotels = []entity.Hotel{}
+	if properties == nil {
+		properties = []entity.Property{}
 	}
 
 	totalPage := int(total) / pagination.Limit
@@ -68,8 +68,8 @@ func (h *HotelHandler) GetAll(c echo.Context) error {
 		totalPage++
 	}
 
-	response := entity.PaginatedResponse[entity.Hotel]{
-		Data: hotels,
+	response := entity.PaginatedResponse[entity.Property]{
+		Data: properties,
 		Meta: entity.PaginationMeta{
 			Page:       pagination.Page,
 			Limit:      pagination.Limit,
@@ -81,41 +81,41 @@ func (h *HotelHandler) GetAll(c echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-func (h *HotelHandler) GetByID(c echo.Context) error {
+func (h *PropertyHandler) GetByID(c echo.Context) error {
 	id := c.Param("id")
-	hotel, err := h.uc.GetByID(c.Request().Context(), id)
+	property, err := h.uc.GetByID(c.Request().Context(), id)
 	if err != nil {
 		if errors.Is(err, entity.ErrRecordNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "hotel not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "property not found"})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	return c.JSON(http.StatusOK, hotel)
+	return c.JSON(http.StatusOK, property)
 }
 
-func (h *HotelHandler) Update(c echo.Context) error {
+func (h *PropertyHandler) Update(c echo.Context) error {
 	id := c.Param("id")
-	var req entity.UpdateHotelRequest
+	var req entity.UpdatePropertyRequest
 	if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
 	if err := h.uc.Update(c.Request().Context(), id, req); err != nil {
 		if errors.Is(err, entity.ErrInvalidInput) {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
 		if errors.Is(err, entity.ErrRecordNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "hotel not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "property not found"})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	return c.JSON(http.StatusOK, map[string]string{"message": "hotel updated"})
+	return c.JSON(http.StatusOK, map[string]string{"message": "property updated"})
 }
 
-func (h *HotelHandler) Delete(c echo.Context) error {
+func (h *PropertyHandler) Delete(c echo.Context) error {
 	id := c.Param("id")
 	if err := h.uc.Delete(c.Request().Context(), id); err != nil {
 		if errors.Is(err, entity.ErrRecordNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "hotel not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "property not found"})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	return c.JSON(http.StatusOK, map[string]string{"message": "hotel deleted"})
+	return c.JSON(http.StatusOK, map[string]string{"message": "property deleted"})
 }

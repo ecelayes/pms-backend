@@ -23,13 +23,13 @@ func NewReservationRepository(db *pgxpool.Pool) *ReservationRepository {
 func (r *ReservationRepository) Create(ctx context.Context, tx pgx.Tx, res entity.Reservation) error {
 	query := `
 		INSERT INTO reservations (
-			id, room_type_id, reservation_code, stay_range, guest_id, 
+			id, unit_type_id, reservation_code, stay_range, guest_id, 
 			total_price, status, adults, children, rate_plan_id
 		)
 		VALUES ($1, $2, $3, daterange($4::date, $5::date), $6, $7, 'confirmed', $8, $9, $10)
 	`
 	_, err := tx.Exec(ctx, query, 
-		res.ID, res.RoomTypeID, res.ReservationCode, res.Start, res.End, res.GuestID, 
+		res.ID, res.UnitTypeID, res.ReservationCode, res.Start, res.End, res.GuestID, 
 		res.TotalPrice, res.Adults, res.Children, res.RatePlanID,
 	)
 	if err != nil {
@@ -54,18 +54,18 @@ func (r *ReservationRepository) UpdateStatus(ctx context.Context, id string, sta
 	return nil
 }
 
-func (r *ReservationRepository) CountOverlapping(ctx context.Context, roomTypeID string, start, end time.Time) (int, error) {
+func (r *ReservationRepository) CountOverlapping(ctx context.Context, unitTypeID string, start, end time.Time) (int, error) {
 	query := `
 		SELECT COUNT(*)
 		FROM reservations
-		WHERE room_type_id = $1 
+		WHERE unit_type_id = $1 
 		  AND status != 'cancelled'
 		  AND lower(stay_range) < $3::date 
 		  AND upper(stay_range) > $2::date
 		  AND deleted_at IS NULL
 	`
 	var count int
-	err := r.db.QueryRow(ctx, query, roomTypeID, start, end).Scan(&count)
+	err := r.db.QueryRow(ctx, query, unitTypeID, start, end).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("count overlapping reservations: %w", err)
 	}
@@ -91,14 +91,14 @@ func (r *ReservationRepository) CountActiveByRatePlan(ctx context.Context, rateP
 
 func (r *ReservationRepository) GetByID(ctx context.Context, id string) (*entity.Reservation, error) {
 	query := `
-		SELECT id, reservation_code, room_type_id, guest_id, lower(stay_range), upper(stay_range), 
+		SELECT id, reservation_code, unit_type_id, guest_id, lower(stay_range), upper(stay_range), 
 		       total_price, status, adults, children, rate_plan_id, created_at, updated_at
 		FROM reservations
 		WHERE id = $1 AND deleted_at IS NULL
 	`
 	var res entity.Reservation
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&res.ID, &res.ReservationCode, &res.RoomTypeID, &res.GuestID, 
+		&res.ID, &res.ReservationCode, &res.UnitTypeID, &res.GuestID, 
 		&res.Start, &res.End, &res.TotalPrice, &res.Status, 
 		&res.Adults, &res.Children, &res.RatePlanID,
 		&res.CreatedAt, &res.UpdatedAt,
@@ -114,14 +114,14 @@ func (r *ReservationRepository) GetByID(ctx context.Context, id string) (*entity
 
 func (r *ReservationRepository) GetByCode(ctx context.Context, code string) (*entity.Reservation, error) {
 	query := `
-		SELECT id, reservation_code, room_type_id, guest_id, lower(stay_range), upper(stay_range), 
+		SELECT id, reservation_code, unit_type_id, guest_id, lower(stay_range), upper(stay_range), 
 		       total_price, status, adults, children, rate_plan_id, created_at, updated_at
 		FROM reservations
 		WHERE reservation_code = $1 AND deleted_at IS NULL
 	`
 	var res entity.Reservation
 	err := r.db.QueryRow(ctx, query, code).Scan(
-		&res.ID, &res.ReservationCode, &res.RoomTypeID, &res.GuestID, 
+		&res.ID, &res.ReservationCode, &res.UnitTypeID, &res.GuestID, 
 		&res.Start, &res.End, &res.TotalPrice, &res.Status, 
 		&res.Adults, &res.Children, &res.RatePlanID,
 		&res.CreatedAt, &res.UpdatedAt,

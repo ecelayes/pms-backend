@@ -22,9 +22,10 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	defer log.Sync()
 
 	// 1. Repositories
-	roomRepo := repository.NewRoomRepository(pool)
+	unitTypeRepo := repository.NewUnitTypeRepository(pool)
+	unitRepo := repository.NewUnitRepository(pool)
 	resRepo := repository.NewReservationRepository(pool)
-	hotelRepo := repository.NewHotelRepository(pool)
+	propertyRepo := repository.NewPropertyRepository(pool)
 	priceRepo := repository.NewPriceRepository(pool)
 	userRepo := repository.NewUserRepository(pool)
 	orgRepo := repository.NewOrganizationRepository(pool)
@@ -39,14 +40,15 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	emailService := service.NewEmailService()
 
 	// 2. UseCases
-	availUC := usecase.NewAvailabilityUseCase(roomRepo, resRepo, ratePlanRepo, pricingService)
-	resUC := usecase.NewReservationUseCase(pool, roomRepo, resRepo, guestRepo, ratePlanRepo, pricingService)
-	pricingUC := usecase.NewPricingUseCase(pool, priceRepo, roomRepo, inventoryService)
+	availUC := usecase.NewAvailabilityUseCase(unitTypeRepo, resRepo, ratePlanRepo, pricingService)
+	resUC := usecase.NewReservationUseCase(pool, unitTypeRepo, resRepo, guestRepo, ratePlanRepo, pricingService)
+	pricingUC := usecase.NewPricingUseCase(pool, priceRepo, unitTypeRepo, inventoryService)
 	authUC := usecase.NewAuthUseCase(pool, userRepo, orgRepo, emailService, log)
 	orgUC := usecase.NewOrganizationUseCase(orgRepo)
 	userUC := usecase.NewUserUseCase(pool, userRepo, orgRepo)
-	hotelUC := usecase.NewHotelUseCase(hotelRepo)
-	roomUC := usecase.NewRoomUseCase(roomRepo)
+	propertyUC := usecase.NewPropertyUseCase(propertyRepo)
+	unitTypeUC := usecase.NewUnitTypeUseCase(unitTypeRepo)
+	unitUC := usecase.NewUnitUseCase(unitRepo)
 	catalogUC := usecase.NewCatalogUseCase(amenityRepo, serviceRepo)
 	ratePlanUC := usecase.NewRatePlanUseCase(ratePlanRepo, resRepo)
 
@@ -55,8 +57,9 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	resHandler := handler.NewReservationHandler(resUC)
 	pricingHandler := handler.NewPricingHandler(pricingUC)
 	authHandler := handler.NewAuthHandler(authUC)
-	hotelHandler := handler.NewHotelHandler(hotelUC)
-	roomHandler := handler.NewRoomHandler(roomUC)
+	propertyHandler := handler.NewPropertyHandler(propertyUC)
+	unitTypeHandler := handler.NewUnitTypeHandler(unitTypeUC)
+	unitHandler := handler.NewUnitHandler(unitUC)
 	orgHandler := handler.NewOrganizationHandler(orgUC)
 	userHandler := handler.NewUserHandler(userUC)
 	catalogHandler := handler.NewCatalogHandler(catalogUC)
@@ -123,19 +126,26 @@ func NewApp(pool *pgxpool.Pool) *echo.Echo {
 	protected.PUT("/users/:id", userHandler.Update)
 	protected.DELETE("/users/:id", userHandler.Delete)
 
-	// Hotels CRUD
-	protected.POST("/hotels", hotelHandler.Create)
-	protected.GET("/hotels", hotelHandler.GetAll)
-	protected.GET("/hotels/:id", hotelHandler.GetByID)
-	protected.PUT("/hotels/:id", hotelHandler.Update)
-	protected.DELETE("/hotels/:id", hotelHandler.Delete)
+	// Properties CRUD
+	protected.POST("/properties", propertyHandler.Create)
+	protected.GET("/properties", propertyHandler.GetAll)
+	protected.GET("/properties/:id", propertyHandler.GetByID)
+	protected.PUT("/properties/:id", propertyHandler.Update)
+	protected.DELETE("/properties/:id", propertyHandler.Delete)
 
-	// Room Types CRUD
-	protected.POST("/room-types", roomHandler.Create)
-	protected.GET("/room-types", roomHandler.GetAll)
-	protected.GET("/room-types/:id", roomHandler.GetByID)
-	protected.PUT("/room-types/:id", roomHandler.Update)
-	protected.DELETE("/room-types/:id", roomHandler.Delete)
+	// Unit Types CRUD
+	protected.POST("/unit-types", unitTypeHandler.Create)
+	protected.GET("/unit-types", unitTypeHandler.GetAll)
+	protected.GET("/unit-types/:id", unitTypeHandler.GetByID)
+	protected.PUT("/unit-types/:id", unitTypeHandler.Update)
+	protected.DELETE("/unit-types/:id", unitTypeHandler.Delete)
+
+	// Units CRUD
+	protected.POST("/units", unitHandler.Create)
+	protected.GET("/units", unitHandler.GetAll)
+	protected.GET("/units/:id", unitHandler.GetByID)
+	protected.PUT("/units/:id", unitHandler.Update)
+	protected.DELETE("/units/:id", unitHandler.Delete)
 
 	// Pricing CRUD
 	protected.POST("/pricing/bulk", pricingHandler.BulkUpdate)

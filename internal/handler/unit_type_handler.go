@@ -9,16 +9,16 @@ import (
 	"github.com/ecelayes/pms-backend/internal/usecase"
 )
 
-type RoomHandler struct {
-	uc *usecase.RoomUseCase
+type UnitTypeHandler struct {
+	uc *usecase.UnitTypeUseCase
 }
 
-func NewRoomHandler(uc *usecase.RoomUseCase) *RoomHandler {
-	return &RoomHandler{uc: uc}
+func NewUnitTypeHandler(uc *usecase.UnitTypeUseCase) *UnitTypeHandler {
+	return &UnitTypeHandler{uc: uc}
 }
 
-func (h *RoomHandler) Create(c echo.Context) error {
-	var req entity.CreateRoomTypeRequest 
+func (h *UnitTypeHandler) Create(c echo.Context) error {
+	var req entity.CreateUnitTypeRequest 
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
@@ -34,11 +34,11 @@ func (h *RoomHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 
-	return c.JSON(http.StatusCreated, map[string]string{"room_type_id": id})
+	return c.JSON(http.StatusCreated, map[string]string{"unit_type_id": id})
 }
 
-func (h *RoomHandler) GetAll(c echo.Context) error {
-	hotelID := c.QueryParam("hotel_id")
+func (h *UnitTypeHandler) GetAll(c echo.Context) error {
+	propertyID := c.QueryParam("property_id")
 	
 	var pagination entity.PaginationRequest
 	if err := c.Bind(&pagination); err != nil {
@@ -51,7 +51,7 @@ func (h *RoomHandler) GetAll(c echo.Context) error {
 		pagination.Limit = 10 
 	}
 
-	rooms, total, err := h.uc.ListByHotel(c.Request().Context(), hotelID, pagination)
+	unitTypes, total, err := h.uc.ListByProperty(c.Request().Context(), propertyID, pagination)
 	if err != nil {
 		if errors.Is(err, entity.ErrInvalidInput) {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -64,8 +64,8 @@ func (h *RoomHandler) GetAll(c echo.Context) error {
 		totalPage++
 	}
 
-	response := entity.PaginatedResponse[entity.RoomType]{
-		Data: rooms,
+	response := entity.PaginatedResponse[entity.UnitType]{
+		Data: unitTypes,
 		Meta: entity.PaginationMeta{
 			Page:       pagination.Page,
 			Limit:      pagination.Limit,
@@ -77,42 +77,42 @@ func (h *RoomHandler) GetAll(c echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-func (h *RoomHandler) GetByID(c echo.Context) error {
+func (h *UnitTypeHandler) GetByID(c echo.Context) error {
 	id := c.Param("id")
 	
-	room, err := h.uc.GetByID(c.Request().Context(), id)
+	ut, err := h.uc.GetByID(c.Request().Context(), id)
 	if err != nil {
 		if errors.Is(err, entity.ErrRecordNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "room type not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "unit type not found"})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	return c.JSON(http.StatusOK, room)
+	return c.JSON(http.StatusOK, ut)
 }
 
-func (h *RoomHandler) Update(c echo.Context) error {
+func (h *UnitTypeHandler) Update(c echo.Context) error {
 	id := c.Param("id")
-	var req entity.UpdateRoomTypeRequest
+	var req entity.UpdateUnitTypeRequest
 	if err := c.Bind(&req); err != nil { return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"}) }
 	if err := h.uc.Update(c.Request().Context(), id, req); err != nil {
 		if errors.Is(err, entity.ErrInvalidInput) {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
 		if errors.Is(err, entity.ErrRecordNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "room type not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "unit type not found"})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	return c.JSON(http.StatusOK, map[string]string{"message": "room updated"})
+	return c.JSON(http.StatusOK, map[string]string{"message": "unit type updated"})
 }
 
-func (h *RoomHandler) Delete(c echo.Context) error {
+func (h *UnitTypeHandler) Delete(c echo.Context) error {
 	id := c.Param("id")
 	if err := h.uc.Delete(c.Request().Context(), id); err != nil {
 		if errors.Is(err, entity.ErrRecordNotFound) {
-			return c.JSON(http.StatusNotFound, map[string]string{"error": "room type not found"})
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "unit type not found"})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	return c.JSON(http.StatusOK, map[string]string{"message": "room deleted"})
+	return c.JSON(http.StatusOK, map[string]string{"message": "unit type deleted"})
 }

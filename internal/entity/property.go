@@ -1,20 +1,23 @@
 package entity
 
-type Hotel struct {
+type Property struct {
 	BaseEntity
 	
 	OrganizationID string `json:"organization_id"`
 	Name    string `json:"name"`
 	Code    string `json:"code"`
+	Type    string `json:"type"`
 }
 
-type CreateHotelRequest struct {
+type CreatePropertyRequest struct {
 	OrganizationID string `json:"organization_id"`
 	Name string `json:"name"`
 	Code string `json:"code"`
+	Type string `json:"type"`
 }
 
-type UpdateHotelRequest struct {
+type UpdatePropertyRequest struct {
 	Name string `json:"name"`
 	Code string `json:"code"`
+	Type string `json:"type"`
 }

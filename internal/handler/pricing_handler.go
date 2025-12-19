@@ -27,7 +27,7 @@ func (h *PricingHandler) BulkUpdate(c echo.Context) error {
 		if errors.Is(err, entity.ErrInvalidInput) {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
-		if err.Error() == "room type not found" {
+		if err.Error() == "unit type not found" {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": err.Error()})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -48,8 +48,8 @@ func (h *PricingHandler) DeleteRule(c echo.Context) error {
 }
 
 func (h *PricingHandler) GetRules(c echo.Context) error {
-	roomTypeID := c.QueryParam("room_type_id")
-	hotelID := c.QueryParam("hotel_id")
+	unitTypeID := c.QueryParam("unit_type_id")
+	propertyID := c.QueryParam("property_id")
 
 	var pagination entity.PaginationRequest
 	if err := c.Bind(&pagination); err != nil {
@@ -62,9 +62,9 @@ func (h *PricingHandler) GetRules(c echo.Context) error {
 		pagination.Limit = 10 
 	}
 
-	rules, total, err := h.uc.GetRules(c.Request().Context(), roomTypeID, hotelID, pagination)
+	rules, total, err := h.uc.GetRules(c.Request().Context(), unitTypeID, propertyID, pagination)
 	if err != nil {
-		if err.Error() == "room_type_id or hotel_id is required" {
+		if err.Error() == "unit_type_id or property_id is required" {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})

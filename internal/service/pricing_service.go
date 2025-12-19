@@ -17,8 +17,8 @@ func NewPricingService(priceRepo *repository.PriceRepository) *PricingService {
 	return &PricingService{priceRepo: priceRepo}
 }
 
-func (s *PricingService) CalculateBaseRates(ctx context.Context, roomTypeID string, fallbackPrice float64, start, end time.Time) ([]entity.DailyRate, float64, error) {
-	rules, _, err := s.priceRepo.ListByRoomType(ctx, roomTypeID, entity.PaginationRequest{Page: 1, Limit: 1000})
+func (s *PricingService) CalculateBaseRates(ctx context.Context, unitTypeID string, fallbackPrice float64, start, end time.Time) ([]entity.DailyRate, float64, error) {
+	rules, _, err := s.priceRepo.ListByUnitType(ctx, unitTypeID, entity.PaginationRequest{Page: 1, Limit: 1000})
 	if err != nil {
 		return nil, 0, err
 	}

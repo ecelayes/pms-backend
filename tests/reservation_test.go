@@ -15,27 +15,28 @@ type ReservationSuite struct {
 	BaseSuite
 	token      string
 	orgID      string
-	hotelID    string
-	roomTypeID string
+	propertyID    string
+	unitTypeID string
 }
 
 func (s *ReservationSuite) SetupTest() {
 	s.BaseSuite.SetupTest()
 	s.token, s.orgID = s.GetAdminTokenAndOrg()
 
-	resH := s.MakeRequest("POST", "/api/v1/hotels", map[string]string{
+	resH := s.MakeRequest("POST", "/api/v1/properties", map[string]string{
 		"organization_id": s.orgID,
-		"name":            "Res Hotel",
+		"name":            "Res Property",
 		"code":            "RHO",
+		"type":            "HOTEL",
 	}, s.token)
 	s.Require().Equal(http.StatusCreated, resH.Code)
 
 	var dataH map[string]string
 	json.Unmarshal(resH.Body.Bytes(), &dataH)
-	s.hotelID = dataH["hotel_id"]
+	s.propertyID = dataH["property_id"]
 
-	resR := s.MakeRequest("POST", "/api/v1/room-types", map[string]interface{}{
-		"hotel_id":       s.hotelID, 
+	resR := s.MakeRequest("POST", "/api/v1/unit-types", map[string]interface{}{
+		"property_id":       s.propertyID, 
 		"name":           "Std", "code": "STD", 
 		"total_quantity": 5,
 		"base_price":     100.0,
@@ -46,10 +47,10 @@ func (s *ReservationSuite) SetupTest() {
 
 	var dataR map[string]string
 	json.Unmarshal(resR.Body.Bytes(), &dataR)
-	s.roomTypeID = dataR["room_type_id"]
+	s.unitTypeID = dataR["unit_type_id"]
 
 	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
-		"room_type_id": s.roomTypeID,
+		"unit_type_id": s.unitTypeID,
 		"start": "2025-01-01", "end": "2025-01-10", 
 		"price": 100.0,
 	}, s.token)
@@ -57,7 +58,7 @@ func (s *ReservationSuite) SetupTest() {
 
 func (s *ReservationSuite) TestReservationCRUD() {
 	res := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
-		"room_type_id":     s.roomTypeID,
+		"unit_type_id":     s.unitTypeID,
 		"guest_email":      "guest@test.com",
 		"guest_first_name": "John", "guest_last_name": "Doe",
 		"start":            "2025-01-01", "end": "2025-01-05",
@@ -81,8 +82,8 @@ func (s *ReservationSuite) TestReservationCRUD() {
 
 func (s *ReservationSuite) TestReservationWithMealPlan() {
 	resRP := s.MakeRequest("POST", "/api/v1/rate-plans", map[string]interface{}{
-		"hotel_id":     s.hotelID,
-		"room_type_id": s.roomTypeID,
+		"property_id":     s.propertyID,
+		"unit_type_id": s.unitTypeID,
 		"name":         "Plus Breakfast",
 		"meal_plan": map[string]interface{}{
 			"included":      true,
@@ -99,7 +100,7 @@ func (s *ReservationSuite) TestReservationWithMealPlan() {
 	planID := dataRP["rate_plan_id"]
 
 	res := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
-		"room_type_id":     s.roomTypeID,
+		"unit_type_id":     s.unitTypeID,
 		"rate_plan_id":     planID,
 		"guest_email":      "meal@test.com",
 		"guest_first_name": "Meal", "guest_last_name": "Tester",
@@ -125,9 +126,9 @@ func (s *ReservationSuite) TestReservationWithMealPlan() {
 }
 
 func (s *ReservationSuite) TestReservationFallbackPrice() {
-	resR := s.MakeRequest("POST", "/api/v1/room-types", map[string]interface{}{
-		"hotel_id":       s.hotelID, 
-		"name":           "Fallback Room", "code": "FBK", 
+	resR := s.MakeRequest("POST", "/api/v1/unit-types", map[string]interface{}{
+		"property_id":       s.propertyID, 
+		"name":           "Fallback UnitType", "code": "FBK", 
 		"total_quantity": 5,
 		"base_price":     120.0,
 		"max_occupancy":  2, "max_adults": 2, "max_children": 0,
@@ -137,10 +138,10 @@ func (s *ReservationSuite) TestReservationFallbackPrice() {
 
 	var dataR map[string]string
 	json.Unmarshal(resR.Body.Bytes(), &dataR)
-	roomID := dataR["room_type_id"]
+	unitTypeID := dataR["unit_type_id"]
 
 	res := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
-		"room_type_id":     roomID,
+		"unit_type_id":     unitTypeID,
 		"guest_email":      "fallback@test.com",
 		"guest_first_name": "Fall", "guest_last_name": "Back",
 		"start":            "2026-05-01", "end": "2026-05-03",
@@ -163,15 +164,15 @@ func (s *ReservationSuite) TestReservationFallbackPrice() {
 
 func (s *ReservationSuite) TestCancellationPenalty() {
 	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
-		"room_type_id": s.roomTypeID,
+		"unit_type_id": s.unitTypeID,
 		"start":        "2026-06-01",
 		"end":          "2026-06-10",
 		"price":        100.0,
 	}, s.token)
 
 	resRP := s.MakeRequest("POST", "/api/v1/rate-plans", map[string]interface{}{
-		"hotel_id":     s.hotelID,
-		"room_type_id": s.roomTypeID,
+		"property_id":     s.propertyID,
+		"unit_type_id": s.unitTypeID,
 		"name":         "Strict 50",
 		"meal_plan":    map[string]interface{}{"included": false},
 		"cancellation_policy": map[string]interface{}{
@@ -193,7 +194,7 @@ func (s *ReservationSuite) TestCancellationPenalty() {
 	planID := dataRP["rate_plan_id"]
 
 	res := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
-		"room_type_id":     s.roomTypeID,
+		"unit_type_id":     s.unitTypeID,
 		"rate_plan_id":     planID,
 		"guest_email":      "penalty@test.com",
 		"guest_first_name": "Pen", "guest_last_name": "Alty",
@@ -221,9 +222,9 @@ func (s *ReservationSuite) TestCancellationPenalty() {
 }
 
 func (s *ReservationSuite) TestConcurrencyOverbooking() {
-	resR := s.MakeRequest("POST", "/api/v1/room-types", map[string]interface{}{
-		"hotel_id":       s.hotelID,
-		"name":           "Single Room", "code": "SGL",
+	resR := s.MakeRequest("POST", "/api/v1/unit-types", map[string]interface{}{
+		"property_id":       s.propertyID,
+		"name":           "Single UnitType", "code": "SGL",
 		"total_quantity": 1,
 		"base_price":     100.0,
 		"max_occupancy":  2, "max_adults": 2, "max_children": 0,
@@ -233,10 +234,10 @@ func (s *ReservationSuite) TestConcurrencyOverbooking() {
 
 	var dataR map[string]string
 	json.Unmarshal(resR.Body.Bytes(), &dataR)
-	targetRoomID := dataR["room_type_id"]
+	targetUnitTypeID := dataR["unit_type_id"]
 
 	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
-		"room_type_id": targetRoomID,
+		"unit_type_id": targetUnitTypeID,
 		"start": "2026-12-01", "end": "2026-12-05", 
 		"price": 100.0,
 	}, s.token)
@@ -262,7 +263,7 @@ func (s *ReservationSuite) TestConcurrencyOverbooking() {
 			defer wg.Done()
 			
 			payload := map[string]interface{}{
-				"room_type_id":     targetRoomID,
+				"unit_type_id":     targetUnitTypeID,
 				"guest_email":      guestEmail,
 				"guest_first_name": "Race", "guest_last_name": "Condition",
 				"start":            "2026-12-01", "end": "2026-12-02",
@@ -291,7 +292,7 @@ func (s *ReservationSuite) TestConcurrencyOverbooking() {
 
 func (s *ReservationSuite) TestReservationValidation() {
 	res := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
-		"room_type_id":     s.roomTypeID,
+		"unit_type_id":     s.unitTypeID,
 		"guest_email":      "val@test.com",
 		"guest_first_name": "Val", "guest_last_name": "Test",
 		"start":            "2025-01-10", "end": "2025-01-01",
@@ -300,7 +301,7 @@ func (s *ReservationSuite) TestReservationValidation() {
 	s.Equal(http.StatusBadRequest, res.Code)
 
 	res2 := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
-		"room_type_id":     s.roomTypeID,
+		"unit_type_id":     s.unitTypeID,
 		"guest_email":      "val@test.com",
 		"guest_first_name": "Val", "guest_last_name": "Test",
 		"start":            "invalid-date", "end": "2025-01-05",
@@ -309,7 +310,7 @@ func (s *ReservationSuite) TestReservationValidation() {
 	s.Equal(http.StatusBadRequest, res2.Code)
 
 	res3 := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
-		"room_type_id":     s.roomTypeID,
+		"unit_type_id":     s.unitTypeID,
 		"guest_email":      "val@test.com",
 		"guest_first_name": "Val", "guest_last_name": "Test",
 		"start":            "2025-01-01", "end": "2025-01-05",

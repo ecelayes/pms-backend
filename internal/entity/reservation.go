@@ -6,7 +6,7 @@ type Reservation struct {
 	BaseEntity
 	
 	ReservationCode string    `json:"reservation_code"`
-	RoomTypeID      string    `json:"room_type_id"`
+	UnitTypeID      string    `json:"unit_type_id"`
 	RatePlanID      *string   `json:"rate_plan_id,omitempty"`
 	GuestID         string    `json:"guest_id"`
 	Start           time.Time `json:"start"`
@@ -19,7 +19,7 @@ type Reservation struct {
 }
 
 type CreateReservationRequest struct {
-	RoomTypeID string  `json:"room_type_id"`
+	UnitTypeID string  `json:"unit_type_id"`
 	RatePlanID *string `json:"rate_plan_id"`
 	
 	GuestEmail     string `json:"guest_email"`

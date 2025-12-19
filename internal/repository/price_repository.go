@@ -19,16 +19,16 @@ func NewPriceRepository(db *pgxpool.Pool) *PriceRepository {
 	return &PriceRepository{db: db}
 }
 
-func (r *PriceRepository) GetOverlapping(ctx context.Context, tx pgx.Tx, roomTypeID string, start, end time.Time) ([]entity.PriceRule, error) {
+func (r *PriceRepository) GetOverlapping(ctx context.Context, tx pgx.Tx, unitTypeID string, start, end time.Time) ([]entity.PriceRule, error) {
 	query := `
-		SELECT id, room_type_id, LOWER(validity_range), UPPER(validity_range), price
+		SELECT id, unit_type_id, LOWER(validity_range), UPPER(validity_range), price
 		FROM price_rules
-		WHERE room_type_id = $1 
+		WHERE unit_type_id = $1 
 		  AND deleted_at IS NULL
 		  AND validity_range && daterange($2::date, $3::date)
 		FOR UPDATE
 	`
-	rows, err := tx.Query(ctx, query, roomTypeID, start, end)
+	rows, err := tx.Query(ctx, query, unitTypeID, start, end)
 	if err != nil {
 		return nil, fmt.Errorf("find overlapping: %w", err)
 	}
@@ -37,7 +37,7 @@ func (r *PriceRepository) GetOverlapping(ctx context.Context, tx pgx.Tx, roomTyp
 	var rules []entity.PriceRule
 	for rows.Next() {
 		var pr entity.PriceRule
-		if err := rows.Scan(&pr.ID, &pr.RoomTypeID, &pr.Start, &pr.End, &pr.Price); err != nil {
+		if err := rows.Scan(&pr.ID, &pr.UnitTypeID, &pr.Start, &pr.End, &pr.Price); err != nil {
 			return nil, err
 		}
 		rules = append(rules, pr)
@@ -63,7 +63,7 @@ func (r *PriceRepository) BatchCreate(ctx context.Context, tx pgx.Tx, rules []en
 	}
 
 	var query strings.Builder
-	query.WriteString("INSERT INTO price_rules (id, room_type_id, validity_range, price, created_at, updated_at) VALUES ")
+	query.WriteString("INSERT INTO price_rules (id, unit_type_id, validity_range, price, created_at, updated_at) VALUES ")
 	
 	values := make([]interface{}, 0, len(rules)*4)
 	now := time.Now()
@@ -77,7 +77,7 @@ func (r *PriceRepository) BatchCreate(ctx context.Context, tx pgx.Tx, rules []en
 			offset+1, offset+2, offset+3, offset+4, offset+5, offset+6))
 
 		rangeStr := fmt.Sprintf("[%s, %s)", rule.Start.Format("2006-01-02"), rule.End.Format("2006-01-02"))
-		values = append(values, rule.ID, rule.RoomTypeID, rangeStr, rule.Price, now, now)
+		values = append(values, rule.ID, rule.UnitTypeID, rangeStr, rule.Price, now, now)
 	}
 
 	_, err := tx.Exec(ctx, query.String(), values...)
@@ -87,35 +87,35 @@ func (r *PriceRepository) BatchCreate(ctx context.Context, tx pgx.Tx, rules []en
 	return nil
 }
 
-func (r *PriceRepository) ListByRoomType(ctx context.Context, roomTypeID string, pagination entity.PaginationRequest) ([]entity.PriceRule, int64, error) {
+func (r *PriceRepository) ListByUnitType(ctx context.Context, unitTypeID string, pagination entity.PaginationRequest) ([]entity.PriceRule, int64, error) {
 	countQuery := `
 		SELECT COUNT(*)
 		FROM price_rules
-		WHERE room_type_id = $1 AND deleted_at IS NULL
+		WHERE unit_type_id = $1 AND deleted_at IS NULL
 	`
 	var total int64
-	if err := r.db.QueryRow(ctx, countQuery, roomTypeID).Scan(&total); err != nil {
+	if err := r.db.QueryRow(ctx, countQuery, unitTypeID).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count price rules: %w", err)
 	}
 
 	query := `
-		SELECT id, room_type_id, LOWER(validity_range), UPPER(validity_range), price, created_at, updated_at
+		SELECT id, unit_type_id, LOWER(validity_range), UPPER(validity_range), price, created_at, updated_at
 		FROM price_rules
-		WHERE room_type_id = $1 AND deleted_at IS NULL
+		WHERE unit_type_id = $1 AND deleted_at IS NULL
 		ORDER BY validity_range ASC
 		LIMIT $2 OFFSET $3
 	`
 	
 	offset := (pagination.Page - 1) * pagination.Limit
 	
-	rows, err := r.db.Query(ctx, query, roomTypeID, pagination.Limit, offset)
+	rows, err := r.db.Query(ctx, query, unitTypeID, pagination.Limit, offset)
 	if err != nil { return nil, 0, fmt.Errorf("list: %w", err) }
 	defer rows.Close()
 
 	var rules []entity.PriceRule
 	for rows.Next() {
 		var pr entity.PriceRule
-		if err := rows.Scan(&pr.ID, &pr.RoomTypeID, &pr.Start, &pr.End, &pr.Price, &pr.CreatedAt, &pr.UpdatedAt); err != nil {
+		if err := rows.Scan(&pr.ID, &pr.UnitTypeID, &pr.Start, &pr.End, &pr.Price, &pr.CreatedAt, &pr.UpdatedAt); err != nil {
 			return nil, 0, err
 		}
 		rules = append(rules, pr)
@@ -136,9 +136,9 @@ func (r *PriceRepository) Delete(ctx context.Context, id string) error {
 }
 
 func (r *PriceRepository) GetByID(ctx context.Context, id string) (*entity.PriceRule, error) {
-	query := `SELECT id, room_type_id, LOWER(validity_range), UPPER(validity_range), price FROM price_rules WHERE id=$1 AND deleted_at IS NULL`
+	query := `SELECT id, unit_type_id, LOWER(validity_range), UPPER(validity_range), price FROM price_rules WHERE id=$1 AND deleted_at IS NULL`
 	var pr entity.PriceRule
-	err := r.db.QueryRow(ctx, query, id).Scan(&pr.ID, &pr.RoomTypeID, &pr.Start, &pr.End, &pr.Price)
+	err := r.db.QueryRow(ctx, query, id).Scan(&pr.ID, &pr.UnitTypeID, &pr.Start, &pr.End, &pr.Price)
 	if err != nil { 
 		if err == pgx.ErrNoRows { return nil, entity.ErrRecordNotFound }
 		return nil, err 
@@ -146,39 +146,39 @@ func (r *PriceRepository) GetByID(ctx context.Context, id string) (*entity.Price
 	return &pr, nil
 }
 
-func (r *PriceRepository) ListByHotel(ctx context.Context, hotelID string, pagination entity.PaginationRequest) ([]entity.PriceRule, int64, error) {
+func (r *PriceRepository) ListByProperty(ctx context.Context, propertyID string, pagination entity.PaginationRequest) ([]entity.PriceRule, int64, error) {
 	countQuery := `
 		SELECT COUNT(*)
 		FROM price_rules pr
-		JOIN room_types rt ON pr.room_type_id = rt.id
-		WHERE rt.hotel_id = $1 AND rt.deleted_at IS NULL AND pr.deleted_at IS NULL
+		JOIN unit_types ut ON pr.unit_type_id = ut.id
+		WHERE ut.property_id = $1 AND ut.deleted_at IS NULL AND pr.deleted_at IS NULL
 	`
 	var total int64
-	if err := r.db.QueryRow(ctx, countQuery, hotelID).Scan(&total); err != nil {
+	if err := r.db.QueryRow(ctx, countQuery, propertyID).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count price rules: %w", err)
 	}
 
 	query := `
-		SELECT pr.id, pr.room_type_id, LOWER(pr.validity_range), UPPER(pr.validity_range), pr.price, pr.created_at, pr.updated_at
+		SELECT pr.id, pr.unit_type_id, LOWER(pr.validity_range), UPPER(pr.validity_range), pr.price, pr.created_at, pr.updated_at
 		FROM price_rules pr
-		JOIN room_types rt ON pr.room_type_id = rt.id
-		WHERE rt.hotel_id = $1 AND rt.deleted_at IS NULL AND pr.deleted_at IS NULL
+		JOIN unit_types ut ON pr.unit_type_id = ut.id
+		WHERE ut.property_id = $1 AND ut.deleted_at IS NULL AND pr.deleted_at IS NULL
 		ORDER BY pr.validity_range ASC
 		LIMIT $2 OFFSET $3
 	`
 	
 	offset := (pagination.Page - 1) * pagination.Limit
 	
-	rows, err := r.db.Query(ctx, query, hotelID, pagination.Limit, offset)
+	rows, err := r.db.Query(ctx, query, propertyID, pagination.Limit, offset)
 	if err != nil {
-		return nil, 0, fmt.Errorf("list by hotel: %w", err)
+		return nil, 0, fmt.Errorf("list by property: %w", err)
 	}
 	defer rows.Close()
 
 	var rules []entity.PriceRule
 	for rows.Next() {
 		var pr entity.PriceRule
-		if err := rows.Scan(&pr.ID, &pr.RoomTypeID, &pr.Start, &pr.End, &pr.Price, &pr.CreatedAt, &pr.UpdatedAt); err != nil {
+		if err := rows.Scan(&pr.ID, &pr.UnitTypeID, &pr.Start, &pr.End, &pr.Price, &pr.CreatedAt, &pr.UpdatedAt); err != nil {
 			return nil, 0, err
 		}
 		rules = append(rules, pr)

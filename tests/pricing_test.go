@@ -13,24 +13,25 @@ type PricingSuite struct {
 	BaseSuite
 	token   string
 	orgID   string
-	hotelID string
-	roomID  string
+	propertyID string
+	unitTypeID  string
 }
 
 func (s *PricingSuite) SetupTest() {
 	s.BaseSuite.SetupTest()
 	s.token, s.orgID = s.GetAdminTokenAndOrg()
 
-	resH := s.MakeRequest("POST", "/api/v1/hotels", map[string]string{
+	resH := s.MakeRequest("POST", "/api/v1/properties", map[string]string{
 		"organization_id": s.orgID,
-		"name":            "Price Hotel", "code": "PHO",
+		"name":            "Price Property", "code": "PHO",
+		"type":            "HOTEL",
 	}, s.token)
 	var dataH map[string]string
 	json.Unmarshal(resH.Body.Bytes(), &dataH)
-	s.hotelID = dataH["hotel_id"]
+	s.propertyID = dataH["property_id"]
 	
-	resR := s.MakeRequest("POST", "/api/v1/room-types", map[string]interface{}{
-		"hotel_id":       s.hotelID, 
+	resR := s.MakeRequest("POST", "/api/v1/unit-types", map[string]interface{}{
+		"property_id":       s.propertyID, 
 		"name":           "R", "code": "RRR", 
 		"total_quantity": 5,
 		"max_occupancy":  2, "max_adults": 2, "max_children": 0,
@@ -39,25 +40,25 @@ func (s *PricingSuite) SetupTest() {
 	
 	var dataR map[string]string
 	json.Unmarshal(resR.Body.Bytes(), &dataR)
-	s.roomID = dataR["room_type_id"]
+	s.unitTypeID = dataR["unit_type_id"]
 }
 
 func (s *PricingSuite) TestBulkPricingLogic() {
 	res := s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
-		"room_type_id": s.roomID,
+		"unit_type_id": s.unitTypeID,
 		"start": "2025-01-01", "end": "2025-01-31", 
 		"price": 100.0,
 	}, s.token)
 	s.Equal(http.StatusOK, res.Code)
 
 	res2 := s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
-		"room_type_id": s.roomID,
+		"unit_type_id": s.unitTypeID,
 		"start": "2025-01-10", "end": "2025-01-15", 
 		"price": 200.0,
 	}, s.token)
 	s.Equal(http.StatusOK, res2.Code)
 
-	resGet := s.MakeRequest("GET", "/api/v1/pricing/rules?room_type_id="+s.roomID, nil, s.token)
+	resGet := s.MakeRequest("GET", "/api/v1/pricing/rules?unit_type_id="+s.unitTypeID, nil, s.token)
 	s.Equal(http.StatusOK, resGet.Code)
 
 	var response entity.PaginatedResponse[entity.PriceRule]
@@ -74,14 +75,14 @@ func (s *PricingSuite) TestBulkPricingLogic() {
 	s.Equal(3, int(response.Meta.TotalItems))
 }
 
-func (s *PricingSuite) TestListByHotel() {
+func (s *PricingSuite) TestListByProperty() {
 	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
-		"room_type_id": s.roomID,
+		"unit_type_id": s.unitTypeID,
 		"start": "2025-03-01", "end": "2025-03-05", 
 		"price": 50.0,
 	}, s.token)
 
-	resGet := s.MakeRequest("GET", "/api/v1/pricing/rules?hotel_id="+s.hotelID, nil, s.token)
+	resGet := s.MakeRequest("GET", "/api/v1/pricing/rules?property_id="+s.propertyID, nil, s.token)
 	s.Equal(http.StatusOK, resGet.Code)
 	
 	var response entity.PaginatedResponse[entity.PriceRule]
@@ -91,18 +92,18 @@ func (s *PricingSuite) TestListByHotel() {
 	s.Len(rules, 1)
 	if len(rules) > 0 {
 		s.Equal(50.0, rules[0].Price)
-		s.Equal(s.roomID, rules[0].RoomTypeID)
+		s.Equal(s.unitTypeID, rules[0].UnitTypeID)
 	}
 }
 
 func (s *PricingSuite) TestDeletePriceRule() {
 	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
-		"room_type_id": s.roomID,
+		"unit_type_id": s.unitTypeID,
 		"start": "2025-02-01", "end": "2025-02-10", 
 		"price": 150.0,
 	}, s.token)
 
-	resGet := s.MakeRequest("GET", "/api/v1/pricing/rules?room_type_id="+s.roomID, nil, s.token)
+	resGet := s.MakeRequest("GET", "/api/v1/pricing/rules?unit_type_id="+s.unitTypeID, nil, s.token)
 	var response entity.PaginatedResponse[entity.PriceRule]
 	json.Unmarshal(resGet.Body.Bytes(), &response)
 	rules := response.Data
@@ -111,7 +112,7 @@ func (s *PricingSuite) TestDeletePriceRule() {
 	resDel := s.MakeRequest("DELETE", "/api/v1/pricing/rules/"+ruleID, nil, s.token)
 	s.Equal(http.StatusOK, resDel.Code)
 
-	resGet2 := s.MakeRequest("GET", "/api/v1/pricing/rules?room_type_id="+s.roomID, nil, s.token)
+	resGet2 := s.MakeRequest("GET", "/api/v1/pricing/rules?unit_type_id="+s.unitTypeID, nil, s.token)
 	var response2 entity.PaginatedResponse[entity.PriceRule]
 	json.Unmarshal(resGet2.Body.Bytes(), &response2)
 	rules2 := response2.Data
@@ -120,7 +121,7 @@ func (s *PricingSuite) TestDeletePriceRule() {
 
 func (s *PricingSuite) TestPricingValidation() {
 	res := s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
-		"room_type_id": s.roomID,
+		"unit_type_id": s.unitTypeID,
 		"start":        "2025-02-01",
 		"end":          "2025-01-01",
 		"price":        100.0,
@@ -128,7 +129,7 @@ func (s *PricingSuite) TestPricingValidation() {
 	s.Equal(http.StatusBadRequest, res.Code)
 
 	res2 := s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
-		"room_type_id": s.roomID,
+		"unit_type_id": s.unitTypeID,
 		"start":        "2025-02-01",
 		"end":          "2025-02-05",
 		"price":        -50.0,

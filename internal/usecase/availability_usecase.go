@@ -11,20 +11,20 @@ import (
 )
 
 type AvailabilityUseCase struct {
-	roomRepo     *repository.RoomRepository
+	unitTypeRepo *repository.UnitTypeRepository
 	resRepo      *repository.ReservationRepository
 	ratePlanRepo *repository.RatePlanRepository
 	pricingService *service.PricingService
 }
 
 func NewAvailabilityUseCase(
-	roomRepo *repository.RoomRepository,
+	unitTypeRepo *repository.UnitTypeRepository,
 	resRepo *repository.ReservationRepository,
 	ratePlanRepo *repository.RatePlanRepository,
 	pricingService *service.PricingService,
 ) *AvailabilityUseCase {
 	return &AvailabilityUseCase{
-		roomRepo:       roomRepo,
+		unitTypeRepo:   unitTypeRepo,
 		resRepo:        resRepo,
 		ratePlanRepo:   ratePlanRepo,
 		pricingService: pricingService,
@@ -36,20 +36,20 @@ func (uc *AvailabilityUseCase) Search(ctx context.Context, filter entity.Availab
 		return nil, 0, entity.ErrInvalidDateRange
 	}
 
-	var roomTypes []entity.RoomType
+	var unitTypes []entity.UnitType
 	var err error
-	if filter.HotelID != "" {
-		roomTypes, _, err = uc.roomRepo.ListByHotel(ctx, filter.HotelID, entity.PaginationRequest{Page: 1, Limit: 1000})
+	if filter.PropertyID != "" {
+		unitTypes, _, err = uc.unitTypeRepo.ListByProperty(ctx, filter.PropertyID, entity.PaginationRequest{Page: 1, Limit: 1000})
 	} else {
-		roomTypes, err = uc.roomRepo.GetAll(ctx)
+		unitTypes, err = uc.unitTypeRepo.GetAll(ctx)
 	}
 	if err != nil {
 		return nil, 0, err
 	}
 
 	var ratePlans []entity.RatePlan
-	if filter.HotelID != "" {
-		ratePlans, _, err = uc.ratePlanRepo.ListByHotel(ctx, filter.HotelID, entity.PaginationRequest{Page: 1, Limit: 1000})
+	if filter.PropertyID != "" {
+		ratePlans, _, err = uc.ratePlanRepo.ListByProperty(ctx, filter.PropertyID, entity.PaginationRequest{Page: 1, Limit: 1000})
 	} else {
 		ratePlans, err = uc.ratePlanRepo.GetAll(ctx)
 	}
@@ -60,7 +60,7 @@ func (uc *AvailabilityUseCase) Search(ctx context.Context, filter entity.Availab
 	var results []entity.AvailabilitySearch
 	nights := int(filter.End.Sub(filter.Start).Hours() / 24)
 
-	for _, rt := range roomTypes {
+	for _, ut := range unitTypes {
 		roomsNeeded := filter.Rooms
 		if roomsNeeded <= 0 {
 			roomsNeeded = 1
@@ -69,24 +69,24 @@ func (uc *AvailabilityUseCase) Search(ctx context.Context, filter entity.Availab
 		totalPax := filter.Adults + filter.Children
 		reqTotalPerRoom := int(math.Ceil(float64(totalPax) / float64(roomsNeeded)))
 
-		if rt.MaxOccupancy < reqTotalPerRoom {
+		if ut.MaxOccupancy < reqTotalPerRoom {
 			continue
 		}
 
-		reservedCount, err := uc.resRepo.CountOverlapping(ctx, rt.ID, filter.Start, filter.End)
+		reservedCount, err := uc.resRepo.CountOverlapping(ctx, ut.ID, filter.Start, filter.End)
 		if err != nil {
 			return nil, 0, err
 		}
 
-		available := rt.TotalQuantity - reservedCount
+		available := ut.TotalQuantity - reservedCount
 		if available < roomsNeeded {
 			continue
 		}
 
 		baseDailyRates, baseTotal, err := uc.pricingService.CalculateBaseRates(
 			ctx,
-			rt.ID,
-			rt.BasePrice,
+			ut.ID,
+			ut.BasePrice,
 			filter.Start,
 			filter.End,
 		)
@@ -97,11 +97,11 @@ func (uc *AvailabilityUseCase) Search(ctx context.Context, filter entity.Availab
 		var rateOptions []entity.RateOption
 
 		for _, rp := range ratePlans {
-			if rp.HotelID != rt.HotelID {
+			if rp.PropertyID != ut.PropertyID {
 				continue
 			}
 
-			if rp.RoomTypeID != nil && *rp.RoomTypeID != rt.ID { 
+			if rp.UnitTypeID != nil && *rp.UnitTypeID != ut.ID { 
 				continue 
 			}
 			if !rp.Active { 
@@ -129,13 +129,13 @@ func (uc *AvailabilityUseCase) Search(ctx context.Context, filter entity.Availab
 
 		if len(rateOptions) > 0 {
 			results = append(results, entity.AvailabilitySearch{
-				RoomTypeID:   rt.ID,
-				RoomTypeName: rt.Name,
-				AvailableQty: rt.TotalQuantity - reservedCount,
-				MaxOccupancy: rt.MaxOccupancy,
-				MaxAdults:    rt.MaxAdults,
-				MaxChildren:  rt.MaxChildren,
-				Amenities:    rt.Amenities,
+				UnitTypeID:   ut.ID,
+				UnitTypeName: ut.Name,
+				AvailableQty: ut.TotalQuantity - reservedCount,
+				MaxOccupancy: ut.MaxOccupancy,
+				MaxAdults:    ut.MaxAdults,
+				MaxChildren:  ut.MaxChildren,
+				Amenities:    ut.Amenities,
 				Rates:        rateOptions,
 			})
 		}

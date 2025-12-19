@@ -20,14 +20,14 @@ func NewRatePlanRepository(db *pgxpool.Pool) *RatePlanRepository {
 func (r *RatePlanRepository) Create(ctx context.Context, rp entity.RatePlan) error {
 	query := `
 		INSERT INTO rate_plans (
-			id, hotel_id, room_type_id, name, description, 
+			id, property_id, unit_type_id, name, description, 
 			meal_plan, cancellation_policy, payment_policy, active,
 			created_at, updated_at
 		)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
 	`
 	_, err := r.db.Exec(ctx, query,
-		rp.ID, rp.HotelID, rp.RoomTypeID, rp.Name, rp.Description,
+		rp.ID, rp.PropertyID, rp.UnitTypeID, rp.Name, rp.Description,
 		rp.MealPlan, rp.CancellationPolicy, rp.PaymentPolicy, rp.Active,
 	)
 	if err != nil {
@@ -36,29 +36,29 @@ func (r *RatePlanRepository) Create(ctx context.Context, rp entity.RatePlan) err
 	return nil
 }
 
-func (r *RatePlanRepository) ListByHotel(ctx context.Context, hotelID string, pagination entity.PaginationRequest) ([]entity.RatePlan, int64, error) {
+func (r *RatePlanRepository) ListByProperty(ctx context.Context, propertyID string, pagination entity.PaginationRequest) ([]entity.RatePlan, int64, error) {
 	countQuery := `
 		SELECT COUNT(*)
 		FROM rate_plans
-		WHERE hotel_id = $1 AND deleted_at IS NULL
+		WHERE property_id = $1 AND deleted_at IS NULL
 	`
 	var total int64
-	if err := r.db.QueryRow(ctx, countQuery, hotelID).Scan(&total); err != nil {
+	if err := r.db.QueryRow(ctx, countQuery, propertyID).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count rate plans: %w", err)
 	}
 
 	query := `
-		SELECT id, hotel_id, room_type_id, name, description, 
+		SELECT id, property_id, unit_type_id, name, description, 
 		       meal_plan, cancellation_policy, payment_policy, active, created_at, updated_at
 		FROM rate_plans
-		WHERE hotel_id = $1 AND deleted_at IS NULL
+		WHERE property_id = $1 AND deleted_at IS NULL
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3
 	`
 	
 	offset := (pagination.Page - 1) * pagination.Limit
 	
-	rows, err := r.db.Query(ctx, query, hotelID, pagination.Limit, offset)
+	rows, err := r.db.Query(ctx, query, propertyID, pagination.Limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list rate plans: %w", err)
 	}
@@ -68,7 +68,7 @@ func (r *RatePlanRepository) ListByHotel(ctx context.Context, hotelID string, pa
 	for rows.Next() {
 		var rp entity.RatePlan
 		err := rows.Scan(
-			&rp.ID, &rp.HotelID, &rp.RoomTypeID, &rp.Name, &rp.Description,
+			&rp.ID, &rp.PropertyID, &rp.UnitTypeID, &rp.Name, &rp.Description,
 			&rp.MealPlan, &rp.CancellationPolicy, &rp.PaymentPolicy, &rp.Active,
 			&rp.CreatedAt, &rp.UpdatedAt,
 		)
@@ -82,14 +82,14 @@ func (r *RatePlanRepository) ListByHotel(ctx context.Context, hotelID string, pa
 
 func (r *RatePlanRepository) GetByID(ctx context.Context, id string) (*entity.RatePlan, error) {
 	query := `
-		SELECT id, hotel_id, room_type_id, name, description, 
+		SELECT id, property_id, unit_type_id, name, description, 
 		       meal_plan, cancellation_policy, payment_policy, active, created_at, updated_at
 		FROM rate_plans
 		WHERE id = $1 AND deleted_at IS NULL
 	`
 	var rp entity.RatePlan
 	err := r.db.QueryRow(ctx, query, id).Scan(
-		&rp.ID, &rp.HotelID, &rp.RoomTypeID, &rp.Name, &rp.Description,
+		&rp.ID, &rp.PropertyID, &rp.UnitTypeID, &rp.Name, &rp.Description,
 		&rp.MealPlan, &rp.CancellationPolicy, &rp.PaymentPolicy, &rp.Active,
 		&rp.CreatedAt, &rp.UpdatedAt,
 	)
@@ -106,7 +106,6 @@ func (r *RatePlanRepository) Update(ctx context.Context, id string, req entity.U
 	query := `UPDATE rate_plans SET updated_at = NOW()`
 	var args []interface{}
 	argID := 1
-
 	addSet := func(column string, value interface{}) {
 		query += fmt.Sprintf(", %s = $%d", column, argID)
 		args = append(args, value)
@@ -160,7 +159,7 @@ func (r *RatePlanRepository) Delete(ctx context.Context, id string) error {
 
 func (r *RatePlanRepository) GetAll(ctx context.Context) ([]entity.RatePlan, error) {
 	query := `
-		SELECT id, hotel_id, room_type_id, name, description, 
+		SELECT id, property_id, unit_type_id, name, description, 
 		       meal_plan, cancellation_policy, payment_policy, active, created_at, updated_at
 		FROM rate_plans
 		WHERE deleted_at IS NULL AND active = TRUE
@@ -175,7 +174,7 @@ func (r *RatePlanRepository) GetAll(ctx context.Context) ([]entity.RatePlan, err
 	for rows.Next() {
 		var rp entity.RatePlan
 		err := rows.Scan(
-			&rp.ID, &rp.HotelID, &rp.RoomTypeID, &rp.Name, &rp.Description,
+			&rp.ID, &rp.PropertyID, &rp.UnitTypeID, &rp.Name, &rp.Description,
 			&rp.MealPlan, &rp.CancellationPolicy, &rp.PaymentPolicy, &rp.Active,
 			&rp.CreatedAt, &rp.UpdatedAt,
 		)

@@ -76,8 +76,8 @@ func jsonValue(item interface{}) (driver.Value, error) {
 type RatePlan struct {
 	BaseEntity
 	
-	HotelID    string `json:"hotel_id"`
-	RoomTypeID *string `json:"room_type_id,omitempty"`
+	PropertyID string `json:"property_id"`
+	UnitTypeID *string `json:"unit_type_id,omitempty"`
 
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -89,8 +89,8 @@ type RatePlan struct {
 }
 
 type CreateRatePlanRequest struct {
-	HotelID            string             `json:"hotel_id"`
-	RoomTypeID         *string            `json:"room_type_id"`
+	PropertyID         string             `json:"property_id"`
+	UnitTypeID         *string            `json:"unit_type_id"`
 	Name               string             `json:"name"`
 	Description        string             `json:"description"`
 	MealPlan           MealPlan           `json:"meal_plan"`

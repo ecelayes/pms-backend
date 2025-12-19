@@ -15,7 +15,7 @@ import (
 
 type ReservationUseCase struct {
 	db             *pgxpool.Pool
-	roomRepo       *repository.RoomRepository
+	unitTypeRepo   *repository.UnitTypeRepository
 	resRepo        *repository.ReservationRepository
 	guestRepo      *repository.GuestRepository
 	ratePlanRepo   *repository.RatePlanRepository
@@ -24,7 +24,7 @@ type ReservationUseCase struct {
 
 func NewReservationUseCase(
 	db *pgxpool.Pool,
-	roomRepo *repository.RoomRepository,
+	unitTypeRepo *repository.UnitTypeRepository,
 	resRepo *repository.ReservationRepository,
 	guestRepo *repository.GuestRepository,
 	ratePlanRepo *repository.RatePlanRepository,
@@ -32,7 +32,7 @@ func NewReservationUseCase(
 ) *ReservationUseCase {
 	return &ReservationUseCase{
 		db:             db,
-		roomRepo:       roomRepo,
+		unitTypeRepo:   unitTypeRepo,
 		resRepo:        resRepo,
 		guestRepo:      guestRepo,
 		ratePlanRepo:   ratePlanRepo,
@@ -65,31 +65,31 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 		return "", fmt.Errorf("%w: children cannot be negative", entity.ErrInvalidInput)
 	}
 
-	roomType, err := uc.roomRepo.GetByID(ctx, req.RoomTypeID)
+	unitType, err := uc.unitTypeRepo.GetByID(ctx, req.UnitTypeID)
 	if err != nil {
-		return "", entity.ErrRoomTypeNotFound
+		return "", entity.ErrUnitTypeNotFound
 	}
 
-	if req.Adults > roomType.MaxAdults {
-		return "", fmt.Errorf("%w: exceeds max adults for this room", entity.ErrInvalidInput)
+	if req.Adults > unitType.MaxAdults {
+		return "", fmt.Errorf("%w: exceeds max adults for this unit type", entity.ErrInvalidInput)
 	}
-	if req.Children > roomType.MaxChildren {
-		return "", fmt.Errorf("%w: exceeds max children for this room", entity.ErrInvalidInput)
+	if req.Children > unitType.MaxChildren {
+		return "", fmt.Errorf("%w: exceeds max children for this unit type", entity.ErrInvalidInput)
 	}
-	if (req.Adults + req.Children) > roomType.MaxOccupancy {
-		return "", fmt.Errorf("%w: exceeds max total occupancy for this room", entity.ErrInvalidInput)
+	if (req.Adults + req.Children) > unitType.MaxOccupancy {
+		return "", fmt.Errorf("%w: exceeds max total occupancy for this unit type", entity.ErrInvalidInput)
 	}
 
-	hotelCode, roomCode, err := uc.roomRepo.GetCodesForGeneration(ctx, req.RoomTypeID)
+	propertyCode, unitTypeCode, err := uc.unitTypeRepo.GetCodesForGeneration(ctx, req.UnitTypeID)
 	if err != nil {
-		return "", entity.ErrRoomTypeNotFound
+		return "", entity.ErrUnitTypeNotFound
 	}
-	resCode := fmt.Sprintf("%s-%s-%s", hotelCode, roomCode, utils.GenerateRandomCode(4))
+	resCode := fmt.Sprintf("%s-%s-%s", propertyCode, unitTypeCode, utils.GenerateRandomCode(4))
 
 	dailyRates, baseTotal, err := uc.pricingService.CalculateBaseRates(
 		ctx,
-		req.RoomTypeID,
-		roomType.BasePrice,
+		req.UnitTypeID,
+		unitType.BasePrice,
 		start,
 		end,
 	)
@@ -109,8 +109,8 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 			return "", fmt.Errorf("invalid rate plan: %w", err)
 		}
 		
-		if rp.RoomTypeID != nil && *rp.RoomTypeID != req.RoomTypeID {
-			return "", fmt.Errorf("%w: rate plan not applicable to this room type", entity.ErrInvalidInput)
+		if rp.UnitTypeID != nil && *rp.UnitTypeID != req.UnitTypeID {
+			return "", fmt.Errorf("%w: rate plan not applicable to this unit type", entity.ErrInvalidInput)
 		}
 		if !rp.Active {
 			return "", fmt.Errorf("%w: rate plan is not active", entity.ErrInvalidInput)
@@ -176,17 +176,17 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 		if err != nil { return "", err }
 	}
 	
-	lockedRoom, err := uc.roomRepo.GetByIDLocked(ctx, tx, req.RoomTypeID)
+	lockedUnitType, err := uc.unitTypeRepo.GetByIDLocked(ctx, tx, req.UnitTypeID)
 	if err != nil {
-		return "", fmt.Errorf("failed to lock room inventory: %w", err)
+		return "", fmt.Errorf("failed to lock unit type inventory: %w", err)
 	}
 
-	reservedCount, err := uc.roomRepo.CountReservations(ctx, tx, req.RoomTypeID, start, end)
+	reservedCount, err := uc.unitTypeRepo.CountReservations(ctx, tx, req.UnitTypeID, start, end)
 	if err != nil {
 		return "", err
 	}
 
-	if (lockedRoom.TotalQuantity - reservedCount) < 1 {
+	if (lockedUnitType.TotalQuantity - reservedCount) < 1 {
 		return "", entity.ErrNoAvailability
 	}
 
@@ -200,7 +200,7 @@ func (uc *ReservationUseCase) Create(ctx context.Context, req entity.CreateReser
 			ID: newID.String(),
 		},
 		ReservationCode: resCode,
-		RoomTypeID:      req.RoomTypeID,
+		UnitTypeID:      req.UnitTypeID,
 		GuestID:         guestID,
 		Start:           start,
 		End:             end,
@@ -242,9 +242,9 @@ func (uc *ReservationUseCase) PreviewCancellation(ctx context.Context, reservati
 		return 0, fmt.Errorf("failed to load rate plan policy: %w", err)
 	}
 
-	room, err := uc.roomRepo.GetByID(ctx, res.RoomTypeID)
+	unitType, err := uc.unitTypeRepo.GetByID(ctx, res.UnitTypeID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to load room type: %w", err)
+		return 0, fmt.Errorf("failed to load unit type: %w", err)
 	}
 
 	checkInTime := time.Date(res.Start.Year(), res.Start.Month(), res.Start.Day(), 15, 0, 0, 0, time.UTC)
@@ -254,8 +254,8 @@ func (uc *ReservationUseCase) PreviewCancellation(ctx context.Context, reservati
 	
 	firstNightRates, baseFirstNight, err := uc.pricingService.CalculateBaseRates(
 		ctx, 
-		res.RoomTypeID, 
-		room.BasePrice,
+		res.UnitTypeID, 
+		unitType.BasePrice,
 		res.Start, 
 		res.Start.AddDate(0, 0, 1),
 	)

@@ -23,8 +23,8 @@ func (h *ReservationHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
 
-	if req.RoomTypeID == "" || req.GuestEmail == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing room_type_id or guest_email"})
+	if req.UnitTypeID == "" || req.GuestEmail == "" {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing unit_type_id or guest_email"})
 	}
 	if req.GuestFirstName == "" || req.GuestLastName == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "guest name is required"})
@@ -39,7 +39,7 @@ func (h *ReservationHandler) Create(c echo.Context) error {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		case errors.Is(err, entity.ErrNoAvailability):
 			return c.JSON(http.StatusConflict, map[string]string{"error": err.Error()})
-		case errors.Is(err, entity.ErrRoomTypeNotFound):
+		case errors.Is(err, entity.ErrUnitTypeNotFound):
 			return c.JSON(http.StatusNotFound, map[string]string{"error": err.Error()})
 		default:
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
