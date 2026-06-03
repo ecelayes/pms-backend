@@ -1,6 +1,6 @@
 # PMS Backend Core
 
-Backend for a Hotel Management System (Property Management System) designed with a focus on scalability, data consistency, and security.
+Backend for a Property Management System (PMS) designed with a focus on scalability, data consistency, and security.
 
 The system utilizes a "Compute on Read" architecture for calculating prices and availability, avoiding inventory desynchronization. It is built following Clean Architecture and Multi-tenancy principles.
 
@@ -16,7 +16,7 @@ The system utilizes a "Compute on Read" architecture for calculating prices and 
 ## Key Features
 
 - Clean Architecture: Strict separation of layers (Handler, Usecase, Repository, Entity).
-- Multi-Tenancy: Support for multiple hotels and owners within the same instance.
+- Multi-Tenancy: Support for multiple properties and owners within the same instance.
 - Dynamic Pricing Engine: Real-time rate calculation based on rules and priorities.
 - Transactional Availability: Overbooking prevention through ACID transactions and database-level locking.
 - Advanced Security: JWT Authentication with unique Salt per user (allows immediate session revocation).
@@ -41,8 +41,8 @@ DB_PASSWORD=postgres
 DB_HOST=localhost
 DB_PORT=5432
 
-DB_NAME=hotel_pms_db
-DB_TEST_NAME=hotel_pms_test
+DB_NAME=pms_db
+DB_TEST_NAME=pms_test
 
 PORT=8081
 ```

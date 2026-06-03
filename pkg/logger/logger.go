@@ -1,17 +1,14 @@
 package logger
 
 import (
-	"os"
-
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"os"
 )
 
 func New() (*zap.Logger, error) {
 	env := os.Getenv("APP_ENV")
-
 	var config zap.Config
-
 	if env == "production" {
 		config = zap.NewProductionConfig()
 		config.EncoderConfig.TimeKey = "timestamp"
@@ -20,8 +17,6 @@ func New() (*zap.Logger, error) {
 		config = zap.NewDevelopmentConfig()
 		config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	}
-
 	config.OutputPaths = []string{"stdout"}
-	
 	return config.Build()
 }

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 	"github.com/stretchr/testify/suite"
-	"github.com/ecelayes/pms-backend/internal/entity"
+	"github.com/ecelayes/pms-backend/internal/shared/dto"
 )
 
 type AvailabilitySuite struct {
@@ -45,8 +45,8 @@ func (s *AvailabilitySuite) SetupTest() {
 
 	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
 		"unit_type_id": s.unitTypeID,
-		"start":        "2025-06-01",
-		"end":          "2025-06-10",
+		"start":        "2026-06-01",
+		"end":          "2026-06-10",
 		"price":        150.0,
 	}, s.token)
 
@@ -72,29 +72,31 @@ func (s *AvailabilitySuite) SetupTest() {
 
 func (s *AvailabilitySuite) TestAvailabilitySearch() {
 	url := "/api/v1/availability?property_id=" + s.propertyID + 
-		"&start=2025-06-02&end=2025-06-05&adults=2&children=0&rooms=1"
+		"&start=2026-06-02&end=2026-06-05&adults=2&children=0&rooms=1"
 
 	res := s.MakeRequest("GET", url, nil, "")
 	
 	s.Equal(http.StatusOK, res.Code)
 	
-	var response entity.PaginatedResponse[entity.AvailabilitySearch]
+	var response dto.PaginatedResponse[dto.AvailabilityResult]
 	err := json.Unmarshal(res.Body.Bytes(), &response)
 	s.NoError(err)
 
-	s.NotEmpty(response.Data, "Should return at least one room type")
+	s.NotEmpty(response.Data, "Should return at least one unit type")
 	if len(response.Data) > 0 {
 		s.Equal(s.unitTypeID, response.Data[0].UnitTypeID)
+		s.Greater(response.Data[0].TotalPrice, 0.0)
+		s.Greater(response.Data[0].BasePrice, 0.0)
 	}
 }
 
 func (s *AvailabilitySuite) TestGlobalAvailabilitySearch() {
-	url := "/api/v1/availability?start=2025-06-02&end=2025-06-05&adults=2&children=0&rooms=1"
+	url := "/api/v1/availability?start=2026-06-02&end=2026-06-05&adults=2&children=0&rooms=1"
 	
 	res := s.MakeRequest("GET", url, nil, "") 
 	s.Equal(http.StatusOK, res.Code)
 
-	var response entity.PaginatedResponse[entity.AvailabilitySearch]
+	var response dto.PaginatedResponse[dto.AvailabilityResult]
 	err := json.Unmarshal(res.Body.Bytes(), &response)
 	s.NoError(err)
 	
@@ -105,7 +107,7 @@ func (s *AvailabilitySuite) TestGlobalAvailabilitySearch() {
 			break
 		}
 	}
-	s.True(found, "Global search should return the room type from Avail Property")
+	s.True(found, "Global search should return the unit type from Avail Property")
 }
 
 func (s *AvailabilitySuite) TestAvailabilityPagination() {
@@ -124,8 +126,8 @@ func (s *AvailabilitySuite) TestAvailabilityPagination() {
 
 	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
 		"unit_type_id": unitTypeID2,
-		"start":        "2025-06-01",
-		"end":          "2025-06-10",
+		"start":        "2026-06-01",
+		"end":          "2026-06-10",
 		"price":        250.0,
 	}, s.token)
 
@@ -139,11 +141,11 @@ func (s *AvailabilitySuite) TestAvailabilityPagination() {
 		"payment_policy": map[string]interface{}{ "timing": 0, "method": 0 },
 	}, s.token)
 
-	url := "/api/v1/availability?start=2025-06-02&end=2025-06-05&adults=2&children=0&rooms=1&page=1&limit=1&property_id=" + s.propertyID
+	url := "/api/v1/availability?start=2026-06-02&end=2026-06-05&adults=2&children=0&rooms=1&page=1&limit=1&property_id=" + s.propertyID
 	res := s.MakeRequest("GET", url, nil, "")
 	s.Equal(http.StatusOK, res.Code)
 
-	var response entity.PaginatedResponse[entity.AvailabilitySearch]
+	var response dto.PaginatedResponse[dto.AvailabilityResult]
 	json.Unmarshal(res.Body.Bytes(), &response)
 
 	s.Equal(1, len(response.Data))
@@ -151,11 +153,11 @@ func (s *AvailabilitySuite) TestAvailabilityPagination() {
 	s.Equal(2, response.Meta.TotalPages)
 	s.Equal(1, response.Meta.Page)
 
-	url2 := "/api/v1/availability?start=2025-06-02&end=2025-06-05&adults=2&children=0&rooms=1&page=2&limit=1&property_id=" + s.propertyID
+	url2 := "/api/v1/availability?start=2026-06-02&end=2026-06-05&adults=2&children=0&rooms=1&page=2&limit=1&property_id=" + s.propertyID
 	res2 := s.MakeRequest("GET", url2, nil, "")
 	s.Equal(http.StatusOK, res2.Code)
 
-	var response2 entity.PaginatedResponse[entity.AvailabilitySearch]
+	var response2 dto.PaginatedResponse[dto.AvailabilityResult]
 	json.Unmarshal(res2.Body.Bytes(), &response2)
 
 	s.Equal(1, len(response2.Data))
@@ -180,42 +182,46 @@ func (s *AvailabilitySuite) TestAvailabilitySoldOut() {
 
 	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
 		"unit_type_id": unitTypeID,
-		"start":        "2025-08-01", "end": "2025-08-05",
+		"start":        "2026-08-01", "end": "2026-08-05",
 		"price":        100.0,
 	}, s.token)
 
-	s.MakeRequest("POST", "/api/v1/rate-plans", map[string]interface{}{
+	resRP := s.MakeRequest("POST", "/api/v1/rate-plans", map[string]interface{}{
 		"property_id":     s.propertyID, "unit_type_id": unitTypeID,
 		"name": "Standard Rate", 
 		"meal_plan": map[string]interface{}{ "included": false, "type": 0, "price_per_pax": 0 },
 		"cancellation_policy": map[string]interface{}{ "is_refundable": true, "rules": []map[string]interface{}{} },
 		"payment_policy": map[string]interface{}{ "timing": 0, "method": 0 },
 	}, s.token)
+	var dataRP map[string]string
+	json.Unmarshal(resRP.Body.Bytes(), &dataRP)
+	ratePlanID := dataRP["rate_plan_id"]
 
 	resRes := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
 		"unit_type_id":     unitTypeID,
+		"rate_plan_id":     ratePlanID,
 		"guest_email":      "soldout@test.com",
 		"guest_first_name": "Sold", "guest_last_name": "Out",
-		"start":            "2025-08-01", "end": "2025-08-03",
+		"start":            "2026-08-01", "end": "2026-08-03",
 		"adults":           1, "children": 0,
 	}, "")
 	s.Equal(http.StatusCreated, resRes.Code)
 
-	url := "/api/v1/availability?property_id=" + s.propertyID + "&start=2025-08-01&end=2025-08-03&adults=1"
+	url := "/api/v1/availability?property_id=" + s.propertyID + "&start=2026-08-01&end=2026-08-03&adults=1"
 	res := s.MakeRequest("GET", url, nil, "")
 	s.Equal(http.StatusOK, res.Code)
 
-	var response entity.PaginatedResponse[entity.AvailabilitySearch]
+	var response dto.PaginatedResponse[dto.AvailabilityResult]
 	json.Unmarshal(res.Body.Bytes(), &response)
 
 	for _, result := range response.Data {
-		s.NotEqual(unitTypeID, result.UnitTypeID, "Sold out room should not be available")
+		s.NotEqual(unitTypeID, result.UnitTypeID, "Sold out unit should not be available")
 	}
 
-	url2 := "/api/v1/availability?property_id=" + s.propertyID + "&start=2025-08-03&end=2025-08-05&adults=1"
+	url2 := "/api/v1/availability?property_id=" + s.propertyID + "&start=2026-08-03&end=2026-08-05&adults=1"
 	res2 := s.MakeRequest("GET", url2, nil, "")
 	
-	var response2 entity.PaginatedResponse[entity.AvailabilitySearch]
+	var response2 dto.PaginatedResponse[dto.AvailabilityResult]
 	json.Unmarshal(res2.Body.Bytes(), &response2)
 	
 	found := false
@@ -225,19 +231,19 @@ func (s *AvailabilitySuite) TestAvailabilitySoldOut() {
 			break
 		}
 	}
-	s.True(found, "Room should be available after existing reservation check-out")
+	s.True(found, "Unit should be available after existing reservation check-out")
 }
 
 func (s *AvailabilitySuite) TestAvailabilityOccupancy() {
-	url := "/api/v1/availability?property_id=" + s.propertyID + "&start=2025-06-02&end=2025-06-05&adults=3"
+	url := "/api/v1/availability?property_id=" + s.propertyID + "&start=2026-06-02&end=2026-06-05&adults=3"
 	res := s.MakeRequest("GET", url, nil, "")
 	s.Equal(http.StatusOK, res.Code)
 
-	var response entity.PaginatedResponse[entity.AvailabilitySearch]
+	var response dto.PaginatedResponse[dto.AvailabilityResult]
 	json.Unmarshal(res.Body.Bytes(), &response)
 
 	for _, result := range response.Data {
-		s.NotEqual(s.unitTypeID, result.UnitTypeID, "Room with max_occupancy 2 should not show for 3 adults")
+		s.NotEqual(s.unitTypeID, result.UnitTypeID, "Unit with max_occupancy 2 should not show for 3 adults")
 	}
 }
 
@@ -262,20 +268,21 @@ func (s *AvailabilitySuite) TestAvailabilityMissingPrice() {
 		"payment_policy": map[string]interface{}{ "timing": 0, "method": 0 },
 	}, s.token)
 
-	url := "/api/v1/availability?property_id=" + s.propertyID + "&start=2025-09-01&end=2025-09-03&adults=2"
+	url := "/api/v1/availability?property_id=" + s.propertyID + "&start=2026-09-01&end=2026-09-03&adults=2"
 	res := s.MakeRequest("GET", url, nil, "")
 	s.Equal(http.StatusOK, res.Code)
 
-	var response entity.PaginatedResponse[entity.AvailabilitySearch]
+	var response dto.PaginatedResponse[dto.AvailabilityResult]
 	json.Unmarshal(res.Body.Bytes(), &response)
 
 	for _, result := range response.Data {
-		s.NotEqual(unitTypeID, result.UnitTypeID, "Room without pricing (and 0 base price) should not be available")
+		s.NotEqual(unitTypeID, result.UnitTypeID, "Unit without pricing should not be available")
 	}
 }
 
+
 func (s *AvailabilitySuite) TestAvailabilityDateValidation() {
-	url := "/api/v1/availability?property_id=" + s.propertyID + "&start=2025-06-05&end=2025-06-02&adults=2"
+	url := "/api/v1/availability?property_id=" + s.propertyID + "&start=2026-06-05&end=2026-06-02&adults=2"
 	res := s.MakeRequest("GET", url, nil, "")
 	
 	s.Equal(http.StatusBadRequest, res.Code)

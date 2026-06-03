@@ -10,9 +10,8 @@ GO_TEST_DSN := postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_T
 
 .PHONY: help run build test clean db-up db-seed db-reset test-prepare test-all test-unit docker-up docker-down docker-db-reset \
         prod-up prod-down prod-logs \
-        test-lifecycle test-hotel test-auth test-room test-pricing test-reservation
+        test-lifecycle test-auth test-room test-pricing test-reservation
 
-help:
 	@echo 'Usage: make [target]'
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
@@ -57,9 +56,9 @@ test-all: test-prepare ## Run ALL integration tests
 	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -skip TestLifecycleSuite
 	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestLifecycleSuite
 
-test-unit: test-prepare ## Run Unit tests only
+test-unit: test-prepare ## Run Unit tests only (Unit Types, Units, Properties)
 	@echo "Running Unit Tests"
-	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -skip TestLifecycleSuite
+	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run "TestUnitSuite|TestUnitTypeSuite|TestPropertySuite|TestCatalogSuite"
 
 test-lifecycle: test-prepare ## Run Lifecycle test
 	@echo "Running Lifecycle Test"
@@ -69,13 +68,21 @@ test-auth: test-prepare
 	@echo "Running Auth Tests"
 	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestAuthSuite
 
-test-hotel: test-prepare
-	@echo "Running Hotel Tests"
-	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestHotelSuite
+test-catalog: test-prepare
+	@echo "Running Catalog Tests"
+	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestCatalogSuite
+
+test-property: test-prepare
+	@echo "Running Property Tests"
+	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestPropertySuite
+
+test-unit-type: test-prepare
+	@echo "Running Unit Type Tests"
+	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestUnitTypeSuite
 
 test-room: test-prepare
-	@echo "Running Room Tests"
-	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestRoomSuite
+	@echo "Running Room (Unit) Tests"
+	export TEST_DATABASE_URL="$(GO_TEST_DSN)"; go test -v ./tests/... -run TestUnitSuite
 
 test-pricing: test-prepare
 	@echo "Running Pricing Tests"

@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/ecelayes/pms-backend/internal/entity"
+	"github.com/ecelayes/pms-backend/internal/shared/dto"
 )
 
 type CatalogSuite struct {
@@ -36,14 +36,14 @@ func (s *CatalogSuite) TestCRUDAmenity() {
 	res = s.MakeRequest("GET", "/api/v1/amenities/"+amenityID, nil, s.superToken)
 	s.Equal(http.StatusOK, res.Code)
 	
-	var a entity.Amenity
+	var a dto.Amenity
 	json.Unmarshal(res.Body.Bytes(), &a)
 	s.Equal("Wifi", a.Name)
 
 	res = s.MakeRequest("GET", "/api/v1/amenities?page=1&limit=5", nil, s.superToken)
 	s.Equal(http.StatusOK, res.Code)
 
-	var listResp entity.PaginatedResponse[entity.Amenity]
+	var listResp dto.PaginatedResponse[dto.Amenity]
 	err := json.Unmarshal(res.Body.Bytes(), &listResp)
 	s.NoError(err)
 	
@@ -59,7 +59,7 @@ func (s *CatalogSuite) TestCRUDAmenity() {
 
 	resUnlim := s.MakeRequest("GET", "/api/v1/amenities", nil, s.superToken)
 	s.Equal(http.StatusOK, resUnlim.Code)
-	var listUnlim entity.PaginatedResponse[entity.Amenity]
+	var listUnlim dto.PaginatedResponse[dto.Amenity]
 	json.Unmarshal(resUnlim.Body.Bytes(), &listUnlim)
 	s.Equal(1, listUnlim.Meta.TotalPages)
 	s.Equal(listUnlim.Meta.TotalItems, int64(len(listUnlim.Data)))
@@ -76,7 +76,7 @@ func (s *CatalogSuite) TestCRUDAmenity() {
 	s.Equal(http.StatusOK, res.Code)
 }
 
-func (s *CatalogSuite) TestCRUDService() {
+func (s *CatalogSuite) TestCRUDGuestService() {
 	createData := map[string]interface{}{
 		"name":        "Spa",
 		"description": "Relaxing spa",
@@ -93,14 +93,14 @@ func (s *CatalogSuite) TestCRUDService() {
 	res = s.MakeRequest("GET", "/api/v1/services/"+serviceID, nil, s.superToken)
 	s.Equal(http.StatusOK, res.Code)
 	
-	var serv entity.HotelService
+	var serv dto.GuestService
 	json.Unmarshal(res.Body.Bytes(), &serv)
 	s.Equal("Spa", serv.Name)
 
 	res = s.MakeRequest("GET", "/api/v1/services?page=1&limit=5", nil, s.superToken)
 	s.Equal(http.StatusOK, res.Code)
 
-	var listResp entity.PaginatedResponse[entity.HotelService]
+	var listResp dto.PaginatedResponse[dto.GuestService]
 	err := json.Unmarshal(res.Body.Bytes(), &listResp)
 	s.NoError(err)
 	
@@ -115,7 +115,7 @@ func (s *CatalogSuite) TestCRUDService() {
 
 	resUnlim := s.MakeRequest("GET", "/api/v1/services", nil, s.superToken)
 	s.Equal(http.StatusOK, resUnlim.Code)
-	var listUnlim entity.PaginatedResponse[entity.HotelService]
+	var listUnlim dto.PaginatedResponse[dto.GuestService]
 	json.Unmarshal(resUnlim.Body.Bytes(), &listUnlim)
 	s.Equal(1, listUnlim.Meta.TotalPages)
 	s.Equal(listUnlim.Meta.TotalItems, int64(len(listUnlim.Data)))

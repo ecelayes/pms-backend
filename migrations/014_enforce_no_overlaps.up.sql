@@ -1,4 +1,4 @@
-CREATE EXTENSION IF NOT EXISTS btree_gist;
+-- Extension btree_gist already created in 001
 
 TRUNCATE price_rules;
 

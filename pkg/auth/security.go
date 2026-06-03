@@ -4,10 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"time"
-
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
+	"time"
 )
 
 const (
@@ -30,17 +29,14 @@ func GenerateRandomSalt() (string, error) {
 	}
 	return hex.EncodeToString(bytes), nil
 }
-
 func HashPassword(password string) (string, error) {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	return string(bytes), err
 }
-
 func CheckPassword(passwordRaw, passwordHash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(passwordRaw))
 	return err == nil
 }
-
 func GenerateToken(userID, organizationID, role, userSalt string) (string, error) {
 	claims := Claims{
 		UserID:         userID,
@@ -55,7 +51,6 @@ func GenerateToken(userID, organizationID, role, userSalt string) (string, error
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(userSalt))
 }
-
 func GenerateResetToken(userID, userSalt string) (string, error) {
 	claims := Claims{
 		UserID:  userID,
@@ -69,7 +64,6 @@ func GenerateResetToken(userID, userSalt string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(userSalt))
 }
-
 func ParseTokenClaimsUnsafe(tokenString string) (*Claims, error) {
 	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, &Claims{})
 	if err != nil {
@@ -80,13 +74,11 @@ func ParseTokenClaimsUnsafe(tokenString string) (*Claims, error) {
 	}
 	return nil, errors.New("invalid claims structure")
 }
-
 func ValidateSignature(tokenString, userSalt string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(userSalt), nil
 	})
-
 	if err != nil || !token.Valid {
 		return nil, errors.New("invalid token signature")
 	}

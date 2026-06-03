@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/ecelayes/pms-backend/internal/entity"
+	"github.com/ecelayes/pms-backend/internal/shared/dto"
 )
 
 type UnitTypeSuite struct {
@@ -82,7 +82,7 @@ func (s *UnitTypeSuite) TestListUnitTypes() {
 	res := s.MakeRequest("GET", "/api/v1/unit-types?property_id="+s.propertyID+"&page=1&limit=5", nil, s.token)
 	s.Equal(http.StatusOK, res.Code)
 
-	var response entity.PaginatedResponse[entity.UnitType]
+	var response dto.PaginatedResponse[dto.UnitType]
 	json.Unmarshal(res.Body.Bytes(), &response)
 
 	s.NotEmpty(response.Data)

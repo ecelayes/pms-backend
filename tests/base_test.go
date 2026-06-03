@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"github.com/ecelayes/pms-backend/internal/bootstrap"
 	"github.com/ecelayes/pms-backend/pkg/auth"
+	"github.com/redis/go-redis/v9"
 )
 
 type BaseSuite struct {
@@ -29,13 +30,21 @@ func (s *BaseSuite) SetupSuite() {
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil { s.T().Fatal(err) }
 	s.db = pool
-	s.echo = bootstrap.NewApp(pool)
+	// Redis
+	redisAddr := os.Getenv("TEST_REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
+	rdb := redis.NewClient(&redis.Options{
+		Addr: redisAddr,
+	})
+	s.echo = bootstrap.NewApp(pool, rdb)
 }
 
 func (s *BaseSuite) TearDownSuite() { s.db.Close() }
 
 func (s *BaseSuite) SetupTest() {
-	tables := []string{"reservations", "price_rules", "unit_types", "properties", "hotel_services", "amenities", "organization_members", "users", "organizations", "guests"}
+	tables := []string{"reservations", "rate_plans", "price_rules", "unit_types", "properties", "guest_services", "amenities", "organization_members", "users", "organizations", "guests"}
 	for _, table := range tables {
 		s.db.Exec(context.Background(), fmt.Sprintf("TRUNCATE TABLE %s CASCADE", table))
 	}

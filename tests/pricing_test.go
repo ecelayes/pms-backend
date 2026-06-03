@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/ecelayes/pms-backend/internal/entity"
+	"github.com/ecelayes/pms-backend/internal/shared/dto"
 )
 
 type PricingSuite struct {
@@ -61,7 +61,7 @@ func (s *PricingSuite) TestBulkPricingLogic() {
 	resGet := s.MakeRequest("GET", "/api/v1/pricing/rules?unit_type_id="+s.unitTypeID, nil, s.token)
 	s.Equal(http.StatusOK, resGet.Code)
 
-	var response entity.PaginatedResponse[entity.PriceRule]
+	var response dto.PaginatedResponse[dto.PriceRule]
 	json.Unmarshal(resGet.Body.Bytes(), &response)
 	rules := response.Data
 
@@ -85,7 +85,7 @@ func (s *PricingSuite) TestListByProperty() {
 	resGet := s.MakeRequest("GET", "/api/v1/pricing/rules?property_id="+s.propertyID, nil, s.token)
 	s.Equal(http.StatusOK, resGet.Code)
 	
-	var response entity.PaginatedResponse[entity.PriceRule]
+	var response dto.PaginatedResponse[dto.PriceRule]
 	json.Unmarshal(resGet.Body.Bytes(), &response)
 	rules := response.Data
 
@@ -104,7 +104,7 @@ func (s *PricingSuite) TestDeletePriceRule() {
 	}, s.token)
 
 	resGet := s.MakeRequest("GET", "/api/v1/pricing/rules?unit_type_id="+s.unitTypeID, nil, s.token)
-	var response entity.PaginatedResponse[entity.PriceRule]
+	var response dto.PaginatedResponse[dto.PriceRule]
 	json.Unmarshal(resGet.Body.Bytes(), &response)
 	rules := response.Data
 	ruleID := rules[0].ID
@@ -113,7 +113,7 @@ func (s *PricingSuite) TestDeletePriceRule() {
 	s.Equal(http.StatusOK, resDel.Code)
 
 	resGet2 := s.MakeRequest("GET", "/api/v1/pricing/rules?unit_type_id="+s.unitTypeID, nil, s.token)
-	var response2 entity.PaginatedResponse[entity.PriceRule]
+	var response2 dto.PaginatedResponse[dto.PriceRule]
 	json.Unmarshal(resGet2.Body.Bytes(), &response2)
 	rules2 := response2.Data
 	s.Len(rules2, 0, "The rule should have been deleted.")

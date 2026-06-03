@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/ecelayes/pms-backend/internal/entity"
+	"github.com/ecelayes/pms-backend/internal/shared/dto"
 )
 
 type RatePlanSuite struct {
@@ -45,10 +45,12 @@ func (s *RatePlanSuite) SetupTest() {
 
 	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
 		"unit_type_id": s.unitTypeID,
-		"start": "2026-01-01", "end": "2026-01-31",
+		"start": "2026-06-01", "end": "2026-06-30",
         "price": 100.0,
 	}, s.token)
 }
+
+
 
 func (s *RatePlanSuite) TestRatePlanLifecycle() {
 	reqBody := map[string]interface{}{
@@ -64,11 +66,11 @@ func (s *RatePlanSuite) TestRatePlanLifecycle() {
 		"cancellation_policy": map[string]interface{}{
 			"is_refundable": true,
 			"rules": []map[string]interface{}{
-				{"hours_before_check_in": 48, "penalty_type": 1, "penalty_value": 100},
+				{"hours_before_check_in": 48, "penalty_type": "percentage", "penalty_value": 100},
 			},
 		},
 		"payment_policy": map[string]interface{}{
-			"timing": 0, "method": 0,
+			"prepay_percent": 0,
 		},
 	}
 
@@ -82,7 +84,7 @@ func (s *RatePlanSuite) TestRatePlanLifecycle() {
 	resList := s.MakeRequest("GET", "/api/v1/rate-plans?property_id="+s.propertyID, nil, s.token)
 	s.Equal(http.StatusOK, resList.Code)
 	
-	var response entity.PaginatedResponse[entity.RatePlan]
+	var response dto.PaginatedResponse[dto.RatePlan]
 	json.Unmarshal(resList.Body.Bytes(), &response)
 	found := false
 	for _, rp := range response.Data {
@@ -99,6 +101,7 @@ func (s *RatePlanSuite) TestRatePlanLifecycle() {
 			"included":      true,
 			"price_per_pax": 30.0,
 		},
+		"active": true,
 	}
 	resUpdate := s.MakeRequest("PUT", "/api/v1/rate-plans/"+planID, updateBody, s.token)
 	s.Equal(http.StatusOK, resUpdate.Code)
@@ -108,7 +111,7 @@ func (s *RatePlanSuite) TestRatePlanLifecycle() {
 		"rate_plan_id":     planID,
 		"guest_email":      "check@integrity.com",
 		"guest_first_name": "Integrity", "guest_last_name": "Check",
-		"start":            "2026-01-01", "end": "2026-01-02",
+		"start":            "2026-06-05", "end": "2026-06-07",
 		"adults":           2, "children": 0,
 	}, "")
 	s.Require().Equal(http.StatusCreated, resRes.Code)
@@ -150,7 +153,7 @@ func (s *RatePlanSuite) TestRatePlanValidation() {
 		"cancellation_policy": map[string]interface{}{
 			"is_refundable": false,
 			"rules": []map[string]interface{}{
-				{"hours_before_check_in": 48, "penalty_type": 1, "penalty_value": 100},
+				{"hours_before_check_in": 48, "penalty_type": "percentage", "penalty_value": 100},
 			},
 		},
 	}, s.token)

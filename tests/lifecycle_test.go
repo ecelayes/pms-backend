@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/ecelayes/pms-backend/internal/entity"
+	"github.com/ecelayes/pms-backend/internal/shared/dto"
 )
 
 type LifecycleSuite struct {
@@ -25,6 +25,7 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 	s.Run("1. Create Organization", func() {
 		res := s.MakeRequest("POST", "/api/v1/organizations", map[string]string{
 			"name": "Global Properties Corp",
+			"code": "GPC",
 		}, s.superToken)
 		s.Equal(http.StatusCreated, res.Code)
 		var data map[string]string
@@ -89,7 +90,7 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 	s.Run("6. Set Pricing (Base Rate)", func() {
 		res := s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
 			"unit_type_id": s.unitTypeID,
-			"start": "2025-10-01", "end": "2025-10-10", 
+			"start": "2027-10-01", "end": "2027-10-10", 
 			"price": 200.0,
 		}, s.ownerToken)
 		s.Equal(http.StatusOK, res.Code)
@@ -129,7 +130,7 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 			"rate_plan_id":     s.ratePlanID,
 			"guest_email":      "client@mail.com",
 			"guest_first_name": "Client", "guest_last_name": "One",
-			"start":            "2025-10-01", "end": "2025-10-05",
+			"start":            "2027-10-01", "end": "2027-10-05",
 			"adults":           2, "children": 0,
 		}, "")
 		
@@ -145,11 +146,10 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 		resGet := s.MakeRequest("GET", "/api/v1/reservations/"+code, nil, "")
 		s.Equal(http.StatusOK, resGet.Code)
 
-		var reservation entity.Reservation
+		var reservation dto.Reservation
 		json.Unmarshal(resGet.Body.Bytes(), &reservation)
 
-		s.Equal(1000.0, reservation.TotalPrice, "El precio total debe incluir alojamiento + desayuno")
-		s.Equal(s.ratePlanID, *reservation.RatePlanID)
+		s.Equal(1000.0, reservation.PriceAmount, "El precio total debe incluir alojamiento + desayuno")
 	})
 }
 

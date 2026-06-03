@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/ecelayes/pms-backend/internal/entity"
+	"github.com/ecelayes/pms-backend/internal/shared/dto"
 )
 
 type PropertySuite struct {
@@ -36,7 +36,7 @@ func (s *PropertySuite) TestCRUDProperty() {
 	resList := s.MakeRequest("GET", "/api/v1/properties?organization_id="+s.orgID, nil, s.token)
 	s.Equal(http.StatusOK, resList.Code)
 	
-	var response entity.PaginatedResponse[entity.Property]
+	var response dto.PaginatedResponse[dto.Property]
 	json.Unmarshal(resList.Body.Bytes(), &response)
 	s.NotEmpty(response.Data)
 	found := false

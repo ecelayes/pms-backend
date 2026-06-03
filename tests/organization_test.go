@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/ecelayes/pms-backend/internal/entity"
+	"github.com/ecelayes/pms-backend/internal/shared/dto"
 )
 
 type OrganizationSuite struct {
@@ -22,6 +22,7 @@ func (s *OrganizationSuite) SetupTest() {
 func (s *OrganizationSuite) TestCRUDOrganization() {
 	createData := map[string]interface{}{
 		"name": "Test Org",
+		"code": "TEST",
 	}
 	res := s.MakeRequest("POST", "/api/v1/organizations", createData, s.superToken)
 	s.Equal(http.StatusCreated, res.Code)
@@ -34,7 +35,7 @@ func (s *OrganizationSuite) TestCRUDOrganization() {
 	res = s.MakeRequest("GET", "/api/v1/organizations/"+orgID, nil, s.superToken)
 	s.Equal(http.StatusOK, res.Code)
 
-	var org entity.Organization
+	var org dto.Organization
 	json.Unmarshal(res.Body.Bytes(), &org)
 	s.Equal("Test Org", org.Name)
 	s.NotEmpty(org.Code)
@@ -42,7 +43,7 @@ func (s *OrganizationSuite) TestCRUDOrganization() {
 	res = s.MakeRequest("GET", "/api/v1/organizations?page=1&limit=10", nil, s.superToken)
 	s.Equal(http.StatusOK, res.Code)
 
-	var listResp entity.PaginatedResponse[entity.Organization]
+	var listResp dto.PaginatedResponse[dto.Organization]
 	err := json.Unmarshal(res.Body.Bytes(), &listResp)
 	s.NoError(err)
 
@@ -59,7 +60,7 @@ func (s *OrganizationSuite) TestCRUDOrganization() {
 	resUnlim := s.MakeRequest("GET", "/api/v1/organizations", nil, s.superToken)
 	s.Equal(http.StatusOK, resUnlim.Code)
 	
-	var listUnlim entity.PaginatedResponse[entity.Organization]
+	var listUnlim dto.PaginatedResponse[dto.Organization]
 	json.Unmarshal(resUnlim.Body.Bytes(), &listUnlim)
 	
 	s.Equal(1, listUnlim.Meta.Page)

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/ecelayes/pms-backend/internal/entity"
+	"github.com/ecelayes/pms-backend/internal/shared/dto"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -25,7 +25,7 @@ func (s *UnitSuite) SetupTest() {
 	s.BaseSuite.SetupTest()
 	s.token, s.orgID = s.BaseSuite.GetAdminTokenAndOrg()
 
-	propReq := entity.CreatePropertyRequest{
+	propReq := dto.CreatePropertyRequest{
 		OrganizationID: s.orgID,
 		Name:    "Unit Test Property",
 		Code:    "UTP01",
@@ -38,7 +38,7 @@ func (s *UnitSuite) SetupTest() {
 	json.Unmarshal(resp.Body.Bytes(), &propResult)
 	s.propertyID = propResult["property_id"]
 
-	utReq := entity.CreateUnitTypeRequest{
+	utReq := dto.CreateUnitTypeRequest{
 		PropertyID:    s.propertyID,
 		Name:          "Standard Room",
 		Code:          "STD",
@@ -57,7 +57,7 @@ func (s *UnitSuite) SetupTest() {
 }
 
 func (s *UnitSuite) TestCreateUnit() {
-	req := entity.CreateUnitRequest{
+	req := dto.CreateUnitRequest{
 		PropertyID: s.propertyID,
 		UnitTypeID: s.unitTypeID,
 		Name:       "101",
@@ -73,7 +73,7 @@ func (s *UnitSuite) TestCreateUnit() {
 }
 
 func (s *UnitSuite) TestGetUnitsByProperty() {
-	req := entity.CreateUnitRequest{
+	req := dto.CreateUnitRequest{
 		PropertyID: s.propertyID,
 		UnitTypeID: s.unitTypeID,
 		Name:       "102",
@@ -84,8 +84,9 @@ func (s *UnitSuite) TestGetUnitsByProperty() {
 	resp := s.MakeRequest("GET", "/api/v1/units?property_id=" + s.propertyID, nil, s.token)
 	s.Equal(http.StatusOK, resp.Code)
 
-	var units []entity.Unit
-	json.Unmarshal(resp.Body.Bytes(), &units)
+	var respData dto.PaginatedResponse[dto.Unit]
+	json.Unmarshal(resp.Body.Bytes(), &respData)
+	units := respData.Data
 	s.GreaterOrEqual(len(units), 1)
 	found := false
 	for _, u := range units {
@@ -98,7 +99,7 @@ func (s *UnitSuite) TestGetUnitsByProperty() {
 }
 
 func (s *UnitSuite) TestUpdateUnit() {
-	req := entity.CreateUnitRequest{
+	req := dto.CreateUnitRequest{
 		PropertyID: s.propertyID,
 		UnitTypeID: s.unitTypeID,
 		Name:       "103",
@@ -111,7 +112,7 @@ func (s *UnitSuite) TestUpdateUnit() {
 	json.Unmarshal(createResp.Body.Bytes(), &createResult)
 	unitID := createResult["unit_id"]
 
-	updateReq := entity.UpdateUnitRequest{
+	updateReq := dto.UpdateUnitRequest{
 		Name:   "103-B",
 		Status: "DIRTY",
 	}
@@ -119,10 +120,11 @@ func (s *UnitSuite) TestUpdateUnit() {
 	s.Equal(http.StatusOK, updateResp.Code)
 
 	getResp := s.MakeRequest("GET", "/api/v1/units?property_id=" + s.propertyID, nil, s.token)
-	var units []entity.Unit
-	json.Unmarshal(getResp.Body.Bytes(), &units)
+	var getRespData dto.PaginatedResponse[dto.Unit]
+	json.Unmarshal(getResp.Body.Bytes(), &getRespData)
+	units := getRespData.Data
 	
-	var updatedUnit entity.Unit
+	var updatedUnit dto.Unit
 	for _, u := range units {
 		if u.ID == unitID {
 			updatedUnit = u
@@ -134,7 +136,7 @@ func (s *UnitSuite) TestUpdateUnit() {
 }
 
 func (s *UnitSuite) TestDeleteUnit() {
-	req := entity.CreateUnitRequest{
+	req := dto.CreateUnitRequest{
 		PropertyID: s.propertyID,
 		UnitTypeID: s.unitTypeID,
 		Name:       "104",
@@ -151,8 +153,9 @@ func (s *UnitSuite) TestDeleteUnit() {
 	s.Equal(http.StatusOK, delResp.Code)
 
 	getResp := s.MakeRequest("GET", "/api/v1/units?property_id=" + s.propertyID, nil, s.token)
-	var units []entity.Unit
-	json.Unmarshal(getResp.Body.Bytes(), &units)
+	var getRespData dto.PaginatedResponse[dto.Unit]
+	json.Unmarshal(getResp.Body.Bytes(), &getRespData)
+	units := getRespData.Data
 	
 	for _, u := range units {
 		s.NotEqual(unitID, u.ID)

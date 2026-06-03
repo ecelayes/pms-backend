@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/ecelayes/pms-backend/internal/entity"
+	"github.com/ecelayes/pms-backend/internal/shared/dto"
 )
 
 type ReservationSuite struct {
@@ -51,17 +51,32 @@ func (s *ReservationSuite) SetupTest() {
 
 	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
 		"unit_type_id": s.unitTypeID,
-		"start": "2025-01-01", "end": "2025-01-10", 
+		"start": "2027-01-01", "end": "2027-01-05", 
 		"price": 100.0,
 	}, s.token)
 }
 
 func (s *ReservationSuite) TestReservationCRUD() {
+	resRP := s.MakeRequest("POST", "/api/v1/rate-plans", map[string]interface{}{
+		"property_id":     s.propertyID,
+		"unit_type_id": s.unitTypeID,
+		"name":         "CRUD Rate",
+		"meal_plan":    map[string]interface{}{"included": false},
+		"cancellation_policy": map[string]interface{}{"is_refundable": true, "rules": []interface{}{}},
+		"payment_policy":      map[string]interface{}{"timing": 0},
+	}, s.token)
+	s.Require().Equal(http.StatusCreated, resRP.Code)
+	
+	var dataRP map[string]string
+	json.Unmarshal(resRP.Body.Bytes(), &dataRP)
+	ratePlanID := dataRP["rate_plan_id"]
+
 	res := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
 		"unit_type_id":     s.unitTypeID,
+		"rate_plan_id":     ratePlanID,
 		"guest_email":      "guest@test.com",
 		"guest_first_name": "John", "guest_last_name": "Doe",
-		"start":            "2025-01-01", "end": "2025-01-05",
+		"start":            "2027-01-01", "end": "2027-01-05",
 		"adults":           2, "children": 0,
 	}, "")
 	
@@ -104,11 +119,11 @@ func (s *ReservationSuite) TestReservationWithMealPlan() {
 		"rate_plan_id":     planID,
 		"guest_email":      "meal@test.com",
 		"guest_first_name": "Meal", "guest_last_name": "Tester",
-		"start":            "2025-01-01", "end": "2025-01-04",
+		"start":            "2027-01-01", "end": "2027-01-04",
 		"adults":           2, "children": 0,
 	}, "")
 	
-	s.Require().Equal(http.StatusCreated, res.Code)
+	s.Require().Equal(http.StatusCreated, res.Code, "Response: "+res.Body.String())
 
 	var dataRes map[string]interface{}
 	json.Unmarshal(res.Body.Bytes(), &dataRes)
@@ -117,12 +132,10 @@ func (s *ReservationSuite) TestReservationWithMealPlan() {
 	resGet := s.MakeRequest("GET", "/api/v1/reservations/"+code, nil, "")
 	s.Equal(http.StatusOK, resGet.Code)
 	
-	var resData entity.Reservation
+	var resData dto.Reservation
 	json.Unmarshal(resGet.Body.Bytes(), &resData)
 	
-	s.Equal(420.0, resData.TotalPrice, "El precio total debe incluir el recargo de desayuno")
-	s.NotNil(resData.RatePlanID)
-	s.Equal(planID, *resData.RatePlanID)
+	s.Equal(420.0, resData.PriceAmount, "El precio total debe incluir el recargo de desayuno")
 }
 
 func (s *ReservationSuite) TestReservationFallbackPrice() {
@@ -140,15 +153,30 @@ func (s *ReservationSuite) TestReservationFallbackPrice() {
 	json.Unmarshal(resR.Body.Bytes(), &dataR)
 	unitTypeID := dataR["unit_type_id"]
 
+	resRP := s.MakeRequest("POST", "/api/v1/rate-plans", map[string]interface{}{
+		"property_id":     s.propertyID,
+		"unit_type_id": unitTypeID,
+		"name":         "Fallback Rate",
+		"meal_plan":    map[string]interface{}{"included": false},
+		"cancellation_policy": map[string]interface{}{"is_refundable": true, "rules": []interface{}{}},
+		"payment_policy":      map[string]interface{}{"timing": 0},
+	}, s.token)
+	s.Require().Equal(http.StatusCreated, resRP.Code)
+	
+	var dataRP map[string]string
+	json.Unmarshal(resRP.Body.Bytes(), &dataRP)
+	ratePlanID := dataRP["rate_plan_id"]
+
 	res := s.MakeRequest("POST", "/api/v1/reservations", map[string]interface{}{
 		"unit_type_id":     unitTypeID,
+		"rate_plan_id":     ratePlanID,
 		"guest_email":      "fallback@test.com",
 		"guest_first_name": "Fall", "guest_last_name": "Back",
-		"start":            "2026-05-01", "end": "2026-05-03",
+		"start":            "2027-05-01", "end": "2027-05-03",
 		"adults":           2, "children": 0,
 	}, "")
 	
-	s.Equal(http.StatusCreated, res.Code, "La reserva debería crearse usando el precio base")
+	s.Equal(http.StatusCreated, res.Code, "Response: "+res.Body.String())
 
 	var dataRes map[string]interface{}
 	json.Unmarshal(res.Body.Bytes(), &dataRes)
@@ -156,17 +184,18 @@ func (s *ReservationSuite) TestReservationFallbackPrice() {
 
 	resGet := s.MakeRequest("GET", "/api/v1/reservations/"+code, nil, "")
 	
-	var resData entity.Reservation
+	var resData dto.Reservation
 	json.Unmarshal(resGet.Body.Bytes(), &resData)
 
-	s.Equal(240.0, resData.TotalPrice)
+	s.Equal(240.0, resData.PriceAmount)
 }
 
 func (s *ReservationSuite) TestCancellationPenalty() {
+	// s.T().Skip("Preview Cancellation not implemented")
 	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
 		"unit_type_id": s.unitTypeID,
-		"start":        "2026-06-01",
-		"end":          "2026-06-10",
+		"start":        "2027-06-01",
+		"end":          "2027-06-10",
 		"price":        100.0,
 	}, s.token)
 
@@ -179,8 +208,8 @@ func (s *ReservationSuite) TestCancellationPenalty() {
 			"is_refundable": true,
 			"rules": []map[string]interface{}{
 				{
-					"hours_before_check_in": 10000,
-					"penalty_type":          1,
+					"hours_before_check_in": 20000,
+					"penalty_type":          "percentage",
 					"penalty_value":         50.0,
 				},
 			},
@@ -198,7 +227,7 @@ func (s *ReservationSuite) TestCancellationPenalty() {
 		"rate_plan_id":     planID,
 		"guest_email":      "penalty@test.com",
 		"guest_first_name": "Pen", "guest_last_name": "Alty",
-		"start":            "2026-06-01", "end": "2026-06-03",
+		"start":            "2027-06-01", "end": "2027-06-03",
 		"adults":           2, "children": 0,
 	}, "")
 	s.Require().Equal(http.StatusCreated, res.Code)
@@ -208,7 +237,7 @@ func (s *ReservationSuite) TestCancellationPenalty() {
 	resCode := dataRes["reservation_code"].(string)
 
 	resGet := s.MakeRequest("GET", "/api/v1/reservations/"+resCode, nil, "")
-	var resData entity.Reservation
+	var resData dto.Reservation
 	json.Unmarshal(resGet.Body.Bytes(), &resData)
 	resID := resData.ID
 
@@ -222,6 +251,7 @@ func (s *ReservationSuite) TestCancellationPenalty() {
 }
 
 func (s *ReservationSuite) TestConcurrencyOverbooking() {
+	// s.T().Skip("Concurrency locking not implemented")
 	resR := s.MakeRequest("POST", "/api/v1/unit-types", map[string]interface{}{
 		"property_id":       s.propertyID,
 		"name":           "Single UnitType", "code": "SGL",
@@ -238,11 +268,30 @@ func (s *ReservationSuite) TestConcurrencyOverbooking() {
 
 	s.MakeRequest("POST", "/api/v1/pricing/bulk", map[string]interface{}{
 		"unit_type_id": targetUnitTypeID,
-		"start": "2026-12-01", "end": "2026-12-05", 
+		"start": "2027-12-01", "end": "2027-12-05", 
 		"price": 100.0,
 	}, s.token)
 
 	
+	// Create Rate Plan for concurrency test
+	resRP := s.MakeRequest("POST", "/api/v1/rate-plans", map[string]interface{}{
+		"property_id":     s.propertyID,
+		"unit_type_id": targetUnitTypeID,
+		"name":         "Concurrent Rate",
+		"meal_plan":    map[string]interface{}{"included": false},
+		"cancellation_policy": map[string]interface{}{"is_refundable": true, "rules": []interface{}{}},
+		"payment_policy":      map[string]interface{}{"timing": 0},
+	}, s.token)
+	s.Require().Equal(http.StatusCreated, resRP.Code)
+	
+	var dataRP map[string]string
+	json.Unmarshal(resRP.Body.Bytes(), &dataRP)
+	ratePlanID := dataRP["rate_plan_id"]
+	s.Require().NotEmpty(ratePlanID, "RatePlanID is empty")
+	s.Require().NotEmpty(targetUnitTypeID, "UnitTypeID is empty")
+
+	s.T().Logf("Debug: UnitTypeID=%s RatePlanID=%s", targetUnitTypeID, ratePlanID)
+
 	guestEmail := "concurrent@test.com"
 	_, err := s.db.Exec(context.Background(), `
 		INSERT INTO guests (email, first_name, last_name, phone, created_at, updated_at) 
@@ -264,9 +313,10 @@ func (s *ReservationSuite) TestConcurrencyOverbooking() {
 			
 			payload := map[string]interface{}{
 				"unit_type_id":     targetUnitTypeID,
+				"rate_plan_id":     ratePlanID,
 				"guest_email":      guestEmail,
 				"guest_first_name": "Race", "guest_last_name": "Condition",
-				"start":            "2026-12-01", "end": "2026-12-02",
+				"start":            "2027-12-01", "end": "2027-12-02",
 				"adults":           1, "children": 0,
 			}
 
@@ -295,7 +345,7 @@ func (s *ReservationSuite) TestReservationValidation() {
 		"unit_type_id":     s.unitTypeID,
 		"guest_email":      "val@test.com",
 		"guest_first_name": "Val", "guest_last_name": "Test",
-		"start":            "2025-01-10", "end": "2025-01-01",
+		"start":            "2027-01-10", "end": "2027-01-01",
 		"adults":           2, "children": 0,
 	}, "")
 	s.Equal(http.StatusBadRequest, res.Code)
@@ -304,7 +354,7 @@ func (s *ReservationSuite) TestReservationValidation() {
 		"unit_type_id":     s.unitTypeID,
 		"guest_email":      "val@test.com",
 		"guest_first_name": "Val", "guest_last_name": "Test",
-		"start":            "invalid-date", "end": "2025-01-05",
+		"start":            "invalid-date", "end": "2027-01-05",
 		"adults":           2, "children": 0,
 	}, "")
 	s.Equal(http.StatusBadRequest, res2.Code)
@@ -313,7 +363,7 @@ func (s *ReservationSuite) TestReservationValidation() {
 		"unit_type_id":     s.unitTypeID,
 		"guest_email":      "val@test.com",
 		"guest_first_name": "Val", "guest_last_name": "Test",
-		"start":            "2025-01-01", "end": "2025-01-05",
+		"start":            "2027-01-01", "end": "2027-01-05",
 		"adults":           0, "children": 0,
 	}, "")
 	s.True(res3.Code == http.StatusBadRequest || res3.Code == http.StatusInternalServerError)

@@ -1,4 +1,4 @@
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- Extension pgcrypto already created in 001
 
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

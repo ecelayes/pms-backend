@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/ecelayes/pms-backend/internal/entity"
+	"github.com/ecelayes/pms-backend/internal/shared/dto"
 )
 
 type UserSuite struct {
@@ -61,7 +61,7 @@ func (s *UserSuite) TestListUsers() {
 	resList := s.MakeRequest("GET", "/api/v1/users?organization_id="+s.orgID, nil, s.ownerToken)
 	s.Equal(http.StatusOK, resList.Code)
 
-	var response entity.PaginatedResponse[entity.User]
+	var response dto.PaginatedResponse[dto.User]
 	json.Unmarshal(resList.Body.Bytes(), &response)
 	s.NotEmpty(response.Data)
 	s.GreaterOrEqual(response.Meta.TotalItems, int64(1))
