@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Reservation Confirmed</title>
+</head>
+<body>
+    <h1>Reservation Confirmed!</h1>
+    <p>Hello {{.GuestName}},</p>
+    <p>Your reservation has been confirmed.</p>
+    <h2>Reservation Details</h2>
+    <ul>
+        <li><strong>Confirmation Code:</strong> {{.ReservationCode}}</li>
+        <li><strong>Check-in:</strong> {{.CheckInDate}}</li>
+        <li><strong>Check-out:</strong> {{.CheckOutDate}}</li>
+    </ul>
+    <p>We look forward to welcoming you!</p>
+    <p>Best regards,<br>PMS Team</p>
+</body>
+</html>

@@ -36,3 +36,33 @@ func TestMoney(t *testing.T) {
 		assert.Equal(t, int64(2000), prod.Amount())
 	})
 }
+
+func TestMoneyString(t *testing.T) {
+	m := vo.NewMoney(1500, "USD")
+	s := m.String()
+	
+	if s != "1500 USD" {
+		t.Errorf("Expected '1500 USD', got '%s'", s)
+	}
+}
+
+func TestMoneyStringDifferentCurrency(t *testing.T) {
+	testCases := []struct {
+		amount   int64
+		currency string
+		expected string
+	}{
+		{1000, "USD", "1000 USD"},
+		{2500, "EUR", "2500 EUR"},
+		{0, "GBP", "0 GBP"},
+		{99999, "JPY", "99999 JPY"},
+	}
+	
+	for _, tc := range testCases {
+		m := vo.NewMoney(tc.amount, tc.currency)
+		s := m.String()
+		if s != tc.expected {
+			t.Errorf("For %d %s: expected '%s', got '%s'", tc.amount, tc.currency, tc.expected, s)
+		}
+	}
+}

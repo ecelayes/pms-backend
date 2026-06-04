@@ -139,3 +139,63 @@ func TestUser_ChangePassword(t *testing.T) {
 	assert.Equal(t, "newpassword", user.Password())
 	assert.Equal(t, "newsalt", user.Salt())
 }
+
+func TestUserUpdateNoChanges(t *testing.T) {
+	user, _ := NewUser(
+		"test@example.com",
+		"hashedpassword",
+		"salt123",
+		RoleUser,
+		"John",
+		"Doe",
+		"+1234567890",
+	)
+	
+	originalFirst := user.FirstName()
+	originalLast := user.LastName()
+	originalPhone := user.Phone()
+	originalRole := user.Role()
+	
+	// Update with all empty strings - should not change anything
+	user.Update("", "", "", "")
+	
+	if user.FirstName() != originalFirst {
+		t.Error("FirstName should not change when empty string passed")
+	}
+	if user.LastName() != originalLast {
+		t.Error("LastName should not change when empty string passed")
+	}
+	if user.Phone() != originalPhone {
+		t.Error("Phone should not change when empty string passed")
+	}
+	if user.Role() != originalRole {
+		t.Error("Role should not change when empty string passed")
+	}
+}
+
+func TestUserUpdateAllFields(t *testing.T) {
+	user, _ := NewUser(
+		"test@example.com",
+		"hashedpassword",
+		"salt123",
+		RoleUser,
+		"John",
+		"Doe",
+		"+1234567890",
+	)
+	
+	user.Update(RoleSuperAdmin, "Jane", "Smith", "+9999999999")
+	
+	if user.Role() != RoleSuperAdmin {
+		t.Errorf("Expected Role SuperAdmin, got %s", user.Role())
+	}
+	if user.FirstName() != "Jane" {
+		t.Errorf("Expected FirstName 'Jane', got '%s'", user.FirstName())
+	}
+	if user.LastName() != "Smith" {
+		t.Errorf("Expected LastName 'Smith', got '%s'", user.LastName())
+	}
+	if user.Phone() != "+9999999999" {
+		t.Errorf("Expected Phone '+9999999999', got '%s'", user.Phone())
+	}
+}

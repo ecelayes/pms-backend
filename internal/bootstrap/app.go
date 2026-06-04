@@ -1,11 +1,16 @@
 package bootstrap
 
 import (
+	"net/http"
+	"os"
+	"strings"
+
 	"github.com/ecelayes/pms-backend/internal/availability"
 	"github.com/ecelayes/pms-backend/internal/booking"
 	"github.com/ecelayes/pms-backend/internal/catalog"
 	"github.com/ecelayes/pms-backend/internal/iam"
 	"github.com/ecelayes/pms-backend/internal/pricing"
+	"github.com/ecelayes/pms-backend/internal/shared"
 	"github.com/ecelayes/pms-backend/internal/shared/adapter/email"
 	"github.com/ecelayes/pms-backend/pkg/logger"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,9 +18,6 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
-	"net/http"
-	"os"
-	"strings"
 )
 
 func NewApp(pool *pgxpool.Pool, rdb *redis.Client) *echo.Echo {
@@ -24,7 +26,9 @@ func NewApp(pool *pgxpool.Pool, rdb *redis.Client) *echo.Echo {
 		panic(err)
 	}
 	defer log.Sync()
+
 	e := echo.New()
+
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
 		LogURI:      true,
 		LogStatus:   true,
@@ -52,7 +56,9 @@ func NewApp(pool *pgxpool.Pool, rdb *redis.Client) *echo.Echo {
 			return nil
 		},
 	}))
+
 	e.Use(middleware.Recover())
+
 	allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
 	if allowedOrigins == "" {
 		allowedOrigins = "*"
@@ -61,12 +67,14 @@ func NewApp(pool *pgxpool.Pool, rdb *redis.Client) *echo.Echo {
 		AllowOrigins: strings.Split(allowedOrigins, ","),
 		AllowMethods: []string{http.MethodGet, http.MethodHead, http.MethodPut, http.MethodPatch, http.MethodPost, http.MethodDelete},
 	}))
+
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			c.Set("logger", log)
 			return next(c)
 		}
 	})
+
 	e.GET("/health", func(c echo.Context) error {
 		ctx := c.Request().Context()
 		if err := pool.Ping(ctx); err != nil {
@@ -77,13 +85,19 @@ func NewApp(pool *pgxpool.Pool, rdb *redis.Client) *echo.Echo {
 		}
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
+
 	v1 := e.Group("/api/v1")
 	protected := v1.Group("")
-	emailService := email.NewEmailService()
+	admin := e.Group("/admin")
+
+	emailService := email.NewService()
+
 	iamModule := iam.NewModule(pool, v1, protected, emailService)
 	catalogModule := catalog.NewModule(pool, v1, protected)
 	pricingModule := pricing.NewModule(pool, protected)
-	availModule := availability.NewModule(rdb, v1, catalogModule.Service, pricingModule.Service)
+	availModule := availability.NewModule(rdb, v1, catalogModule.Service, pricingModule.Service, emailService)
 	_ = booking.NewModule(pool, v1, protected, catalogModule.Service, pricingModule.Service, iamModule.UserService, availModule.Service, rdb)
+	_ = shared.NewModule(rdb, admin)
+
 	return e
 }

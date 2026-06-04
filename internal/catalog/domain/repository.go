@@ -2,10 +2,9 @@ package domain
 
 import (
 	"context"
-	"errors"
+	
+	sharedErrors "github.com/ecelayes/pms-backend/internal/shared/errors"
 )
-
-var ErrNotFound = errors.New("record not found")
 
 type PropertyRepository interface {
 	SaveProperty(ctx context.Context, p *Property) error
@@ -37,3 +36,6 @@ type GuestServiceRepository interface {
 	FindGuestServiceByID(ctx context.Context, id string) (*GuestService, error)
 	DeleteGuestService(ctx context.Context, id string) error
 }
+
+// ErrNotFound is provided for convenience to avoid importing sharedErrors everywhere
+var ErrNotFound = sharedErrors.ErrNotFound

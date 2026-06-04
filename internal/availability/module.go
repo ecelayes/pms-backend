@@ -2,16 +2,20 @@ package availability
 
 import (
 	"context"
+	"encoding/json"
+	"log"
+	"sync"
+	"time"
+
+	"github.com/labstack/echo/v4"
+	"github.com/redis/go-redis/v9"
 	"github.com/ecelayes/pms-backend/internal/availability/adapter"
 	"github.com/ecelayes/pms-backend/internal/availability/adapter/http"
 	"github.com/ecelayes/pms-backend/internal/availability/application"
+	"github.com/ecelayes/pms-backend/internal/shared/adapter/email"
+	"github.com/ecelayes/pms-backend/internal/shared/domain"
 	catalogApp "github.com/ecelayes/pms-backend/internal/catalog/application"
 	pricingApp "github.com/ecelayes/pms-backend/internal/pricing/application"
-	"github.com/ecelayes/pms-backend/internal/shared/domain"
-	"github.com/labstack/echo/v4"
-	"github.com/redis/go-redis/v9"
-	"log"
-	"sync"
 )
 
 type Module struct {
@@ -23,65 +27,131 @@ func NewModule(
 	group *echo.Group,
 	catalogService *catalogApp.CatalogService,
 	pricingService *pricingApp.PricingService,
+	emailSvc *email.Service,
 ) *Module {
 	redisRepo := adapter.NewRedisAvailabilityRepository(rdb)
 	svc := application.NewAvailabilityService(redisRepo, catalogService, pricingService)
 	eventHandler := application.NewEventHandler(redisRepo)
-	go startStreamConsumers(rdb, eventHandler)
+	analyticsStore := domain.NewAnalyticsStore(rdb)
+	
+	go startStreamConsumers(rdb, eventHandler, emailSvc, analyticsStore)
+	
 	httpHandler := http.NewAvailabilityHandler(svc)
 	group.GET("/search", httpHandler.Get)
-	return &Module{
-		Service: svc,
-	}
+	
+	return &Module{Service: svc}
 }
-func startStreamConsumers(client *redis.Client, handler *application.EventHandler) {
+
+func startStreamConsumers(client *redis.Client, handler *application.EventHandler, emailSvc *email.Service, analyticsStore *domain.AnalyticsStore) {
 	var wg sync.WaitGroup
+	
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		startAvailabilityConsumer(client, handler)
 	}()
+	
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		startNotificationsConsumer(client)
+		startNotificationsConsumer(client, emailSvc)
 	}()
+	
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		startAnalyticsConsumer(client)
+		startAnalyticsConsumer(client, analyticsStore)
 	}()
+	
 	wg.Wait()
 }
+
 func startAvailabilityConsumer(client *redis.Client, handler *application.EventHandler) {
 	consumerName := "availability-consumer-1"
 	log.Printf("[AvailabilityModule] Starting stream consumer: %s", consumerName)
+	
 	consumer := domain.NewRedisStreamConsumer(client, domain.GroupAvailability, consumerName)
 	ctx := context.Background()
+	
 	eventTypes := []string{domain.EventReservationCreated, domain.EventReservationCancelled}
 	consumer.Consume(ctx, eventTypes, func(msg *domain.StreamMessage) error {
 		return handler.HandleStreamMessage(msg)
 	})
 }
-func startNotificationsConsumer(client *redis.Client) {
+
+func startNotificationsConsumer(client *redis.Client, emailSvc *email.Service) {
 	consumerName := "notifications-consumer-1"
-	log.Printf("[AvailabilityModule] Starting stream consumer: %s (placeholder)", consumerName)
+	log.Printf("[AvailabilityModule] Starting stream consumer: %s", consumerName)
+	
 	consumer := domain.NewRedisStreamConsumer(client, domain.GroupNotifications, consumerName)
 	ctx := context.Background()
+	
 	eventTypes := []string{domain.EventReservationConfirmed, domain.EventReservationCancelled}
 	consumer.Consume(ctx, eventTypes, func(msg *domain.StreamMessage) error {
-		log.Printf("[NotificationsConsumer] Would send notification for event %s (placeholder)", msg.EventType)
-		return nil
+		return handleNotificationEvent(msg, emailSvc)
 	})
 }
-func startAnalyticsConsumer(client *redis.Client) {
+
+func handleNotificationEvent(msg *domain.StreamMessage, emailSvc *email.Service) error {
+	switch msg.EventType {
+	case domain.EventReservationConfirmed:
+		var payload domain.ReservationConfirmedPayload
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return err
+		}
+		log.Printf("[NotificationsConsumer] Sending confirmation email to %s", payload.GuestEmail)
+		return emailSvc.SendReservationConfirmed(payload.GuestEmail, payload.GuestEmail, payload.ReservationCode, time.Now(), time.Now().AddDate(0, 0, 1))
+		
+	case domain.EventReservationCancelled:
+		var payload domain.ReservationCancelledPayload
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return err
+		}
+		log.Printf("[NotificationsConsumer] Sending cancellation email to %s", payload.GuestEmail)
+		return emailSvc.SendReservationCancelled(payload.GuestEmail, payload.GuestEmail, payload.ReservationCode)
+		
+	default:
+		return nil
+	}
+}
+
+func startAnalyticsConsumer(client *redis.Client, analyticsStore *domain.AnalyticsStore) {
 	consumerName := "analytics-consumer-1"
-	log.Printf("[AvailabilityModule] Starting stream consumer: %s (placeholder)", consumerName)
+	log.Printf("[AvailabilityModule] Starting stream consumer: %s", consumerName)
+	
 	consumer := domain.NewRedisStreamConsumer(client, domain.GroupAnalytics, consumerName)
 	ctx := context.Background()
+	
 	eventTypes := []string{domain.EventReservationCreated, domain.EventReservationConfirmed, domain.EventReservationCancelled}
 	consumer.Consume(ctx, eventTypes, func(msg *domain.StreamMessage) error {
-		log.Printf("[AnalyticsConsumer] Would record analytics for event %s (placeholder)", msg.EventType)
-		return nil
+		return handleAnalyticsEvent(ctx, msg, analyticsStore)
 	})
+}
+
+func handleAnalyticsEvent(ctx context.Context, msg *domain.StreamMessage, analyticsStore *domain.AnalyticsStore) error {
+	switch msg.EventType {
+	case domain.EventReservationCreated:
+		var payload domain.ReservationCreatedPayload
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return err
+		}
+		return analyticsStore.RecordEvent(ctx, msg.EventType, payload)
+		
+	case domain.EventReservationConfirmed:
+		var payload domain.ReservationConfirmedPayload
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return err
+		}
+		return analyticsStore.RecordEvent(ctx, msg.EventType, payload)
+		
+	case domain.EventReservationCancelled:
+		var payload domain.ReservationCancelledPayload
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return err
+		}
+		return analyticsStore.RecordEvent(ctx, msg.EventType, payload)
+		
+	default:
+		return nil
+	}
 }
