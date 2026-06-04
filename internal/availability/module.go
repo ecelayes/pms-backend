@@ -37,7 +37,7 @@ func NewModule(
 	go startStreamConsumers(rdb, eventHandler, emailSvc, analyticsStore)
 	
 	httpHandler := http.NewAvailabilityHandler(svc)
-	group.GET("/search", httpHandler.Get)
+	group.GET("/availability", httpHandler.Get)
 	
 	return &Module{Service: svc}
 }
