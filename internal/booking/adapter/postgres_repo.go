@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"encoding/json"
 	"fmt"
 	"github.com/ecelayes/pms-backend/internal/booking/domain"
@@ -45,7 +46,7 @@ func (r *PostgresReservationRepository) Save(ctx context.Context, res *domain.Re
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	if !isNested {
-		defer tx.Rollback(ctx)
+		defer func() { _ = tx.Rollback(ctx) }()
 	}
 	rangeStr := fmt.Sprintf("[%s,%s)",
 		res.DateRange().Start().Format("2006-01-02"),
@@ -128,8 +129,8 @@ func (r *PostgresReservationRepository) FindByID(ctx context.Context, id string)
 	var start, end, createdAt time.Time
 	err := row.Scan(&propertyID, &unitTypeID, &unitID, &guestID, &start, &end, &priceCents, &currency, &statusStr, &guestEmail, &resCode, &createdAt, &ratePlanID)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to find reservation: %w", err)
 	}
@@ -209,8 +210,8 @@ func (r *PostgresReservationRepository) GetByCode(ctx context.Context, code stri
 	var start, end, createdAt time.Time
 	err := row.Scan(&id, &propertyID, &unitTypeID, &unitID, &guestID, &start, &end, &priceCents, &currency, &statusStr, &guestEmail, &resCode, &createdAt, &ratePlanID)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to find reservation by code: %w", err)
 	}
@@ -255,7 +256,7 @@ func (r *PostgresReservationRepository) RunInTransaction(ctx context.Context, fn
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	ctxWithTx := context.WithValue(ctx, txKey{}, tx)
 	if err := fn(ctxWithTx); err != nil {
 		return err

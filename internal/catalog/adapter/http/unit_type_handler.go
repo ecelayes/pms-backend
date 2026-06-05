@@ -5,6 +5,7 @@ import (
 	"github.com/ecelayes/pms-backend/internal/catalog/application"
 	"github.com/ecelayes/pms-backend/internal/catalog/domain"
 	"github.com/ecelayes/pms-backend/internal/shared/dto"
+	sharedContext "github.com/ecelayes/pms-backend/internal/shared/context"
 	"github.com/labstack/echo/v4"
 	"math"
 	"net/http"
@@ -27,7 +28,7 @@ func (h *UnitTypeHandler) Create(c echo.Context) error {
 	priceCents := int64(req.BasePrice * 100)
 	currency := "USD"
 	id, err := h.service.CreateUnitType(
-		c.Request().Context(),
+		sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)),
 		req.PropertyID, req.Name, req.Code,
 		req.TotalQuantity, priceCents, currency,
 		req.MaxOccupancy, req.MaxAdults, req.MaxChildren,
@@ -53,7 +54,7 @@ func (h *UnitTypeHandler) GetAll(c echo.Context) error {
 	if l, err := strconv.Atoi(c.QueryParam("limit")); err == nil && l > 0 {
 		limit = l
 	}
-	unitTypes, totalCount, err := h.service.ListUnitTypes(c.Request().Context(), propertyID, page, limit)
+	unitTypes, totalCount, err := h.service.ListUnitTypes(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), propertyID, page, limit)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -75,7 +76,7 @@ func (h *UnitTypeHandler) GetAll(c echo.Context) error {
 }
 func (h *UnitTypeHandler) GetByID(c echo.Context) error {
 	id := c.Param("id")
-	ut, err := h.service.GetUnitTypeEntity(c.Request().Context(), id)
+	ut, err := h.service.GetUnitTypeEntity(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id)
 	if err != nil {
 		if errors.Is(err, application.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "unit type not found"})
@@ -102,7 +103,7 @@ func (h *UnitTypeHandler) Update(c echo.Context) error {
 	priceCents := int64(req.BasePrice * 100)
 	currency := "USD"
 	err := h.service.UpdateUnitType(
-		c.Request().Context(), id,
+		sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id,
 		req.Name, req.Code, req.TotalQty, priceCents, currency,
 		req.MaxOccupancy, req.MaxAdults, req.MaxChildren, req.Amenities,
 	)
@@ -116,7 +117,7 @@ func (h *UnitTypeHandler) Update(c echo.Context) error {
 }
 func (h *UnitTypeHandler) Delete(c echo.Context) error {
 	id := c.Param("id")
-	if err := h.service.DeleteUnitType(c.Request().Context(), id); err != nil {
+	if err := h.service.DeleteUnitType(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id); err != nil {
 		if errors.Is(err, application.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "unit type not found"})
 		}

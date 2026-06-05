@@ -451,7 +451,7 @@ func TestAvailabilityService_Search_TrulyEmptyDates(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	if results != nil && len(results) != 0 {
+	if len(results) != 0 {
 		t.Errorf("Expected empty results")
 	}
 }

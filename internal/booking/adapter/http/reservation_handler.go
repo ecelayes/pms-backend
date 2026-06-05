@@ -5,6 +5,7 @@ import (
 	"github.com/ecelayes/pms-backend/internal/booking/application"
 	"github.com/ecelayes/pms-backend/internal/booking/domain"
 	"github.com/ecelayes/pms-backend/internal/shared/vo"
+	sharedContext "github.com/ecelayes/pms-backend/internal/shared/context"
 	"github.com/labstack/echo/v4"
 	"net/http"
 	"strings"
@@ -50,7 +51,7 @@ func (h *ReservationHandler) Create(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid end date"})
 	}
 	code, err := h.service.CreateReservation(
-		c.Request().Context(),
+		sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)),
 		req.UnitTypeID,
 		req.RatePlanID,
 		start, end,
@@ -77,7 +78,7 @@ func (h *ReservationHandler) Create(c echo.Context) error {
 }
 func (h *ReservationHandler) GetByCode(c echo.Context) error {
 	code := c.Param("code")
-	res, err := h.service.GetReservationByCode(c.Request().Context(), code)
+	res, err := h.service.GetReservationByCode(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), code)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -99,7 +100,7 @@ func (h *ReservationHandler) GetByCode(c echo.Context) error {
 }
 func (h *ReservationHandler) PreviewCancel(c echo.Context) error {
 	id := c.Param("id")
-	amount, err := h.service.PreviewCancellation(c.Request().Context(), id)
+	amount, err := h.service.PreviewCancellation(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -107,7 +108,7 @@ func (h *ReservationHandler) PreviewCancel(c echo.Context) error {
 }
 func (h *ReservationHandler) Cancel(c echo.Context) error {
 	id := c.Param("id")
-	err := h.service.CancelReservation(c.Request().Context(), id)
+	err := h.service.CancelReservation(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}

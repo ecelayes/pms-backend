@@ -8,6 +8,8 @@ import (
 	"github.com/ecelayes/pms-backend/internal/shared/vo"
 	"log"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 var (
@@ -28,6 +30,19 @@ type IdentityService interface {
 type AvailabilityService interface {
 	UpdateInventory(ctx context.Context, propertyID, unitTypeID string, start, end time.Time, delta int) error
 }
+
+// ReservationFactory builds domain.Reservation aggregates from external inputs.
+// Default implementation calls domain.NewReservation. Tests can inject mocks
+// that return pre-built reservations to exercise error paths (e.g. Confirm on
+// an already-confirmed reservation).
+type ReservationFactory interface {
+	Create(
+		propertyID, unitTypeID, ratePlanID, guestID string,
+		dateRange vo.DateRange,
+		price vo.Money,
+		guestEmail string,
+	) (*domain.Reservation, error)
+}
 // StreamPublisher is the contract for publishing reservation events.
 // We keep this as a focused interface (only 2 methods) because the booking
 // service only needs these. The full Redis adapter satisfies it via Go's
@@ -37,6 +52,19 @@ type StreamPublisher interface {
 	PublishReservationCancelled(ctx context.Context, payload sharedDomain.ReservationCancelledPayload) error
 }
 type BookingEventPublisher = StreamPublisher
+
+// defaultReservationFactory is the production implementation of ReservationFactory.
+// It calls domain.NewReservation to build a fresh aggregate in pending status.
+type defaultReservationFactory struct{}
+
+func (f *defaultReservationFactory) Create(
+	propertyID, unitTypeID, ratePlanID, guestID string,
+	dateRange vo.DateRange,
+	price vo.Money,
+	guestEmail string,
+) (*domain.Reservation, error) {
+	return domain.NewReservation(propertyID, unitTypeID, ratePlanID, guestID, dateRange, price, guestEmail)
+}
 type BookingService struct {
 	repo         domain.ReservationRepository
 	pricing      PricingService
@@ -44,6 +72,8 @@ type BookingService struct {
 	identity     IdentityService
 	availability AvailabilityService
 	publisher    StreamPublisher
+	factory      ReservationFactory
+	logger       *zap.Logger
 }
 
 func NewBookingService(
@@ -52,8 +82,12 @@ func NewBookingService(
 	catalog CatalogService,
 	identity IdentityService,
 	availability AvailabilityService,
+	logger *zap.Logger,
 	publishers ...StreamPublisher,
 ) *BookingService {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	var publisher StreamPublisher
 	if len(publishers) > 0 && publishers[0] != nil {
 		publisher = publishers[0]
@@ -65,6 +99,8 @@ func NewBookingService(
 		identity:     identity,
 		availability: availability,
 		publisher:    publisher,
+		factory:      &defaultReservationFactory{},
+		logger:       logger,
 	}
 }
 func (s *BookingService) CreateReservation(
@@ -106,7 +142,7 @@ func (s *BookingService) CreateReservation(
 		if err != nil {
 			return err
 		}
-		res, err := domain.NewReservation(propertyID, unitTypeID, ratePlanID, guestID, dr, price, guestEmail)
+		res, err := s.factory.Create(propertyID, unitTypeID, ratePlanID, guestID, dr, price, guestEmail)
 		if err != nil {
 			return err
 		}
@@ -131,7 +167,7 @@ func (s *BookingService) CreateReservation(
 			}
 			event := domain.NewReservationCreatedEvent(res)
 			payload := event.ToPayload()
-			if pubErr := s.publisher.PublishReservationCreated(context.Background(), payload); pubErr != nil {
+			if pubErr := s.publisher.PublishReservationCreated(ctx, payload); pubErr != nil {
 				log.Printf("[BookingService] Failed to publish reservation.created event: %v", pubErr)
 			} else {
 				log.Printf("[BookingService] Published reservation.created event to stream for %s", reservationCode)
@@ -159,7 +195,7 @@ func (s *BookingService) CancelReservation(ctx context.Context, id string) error
 		if s.publisher != nil {
 			event := domain.NewReservationCancelledEvent(res)
 			payload := event.ToPayload()
-			if pubErr := s.publisher.PublishReservationCancelled(context.Background(), payload); pubErr != nil {
+			if pubErr := s.publisher.PublishReservationCancelled(ctx, payload); pubErr != nil {
 				log.Printf("[BookingService] Failed to publish reservation.cancelled event: %v", pubErr)
 			} else {
 				log.Printf("[BookingService] Published reservation.cancelled event to stream for %s", res.ReservationCode())

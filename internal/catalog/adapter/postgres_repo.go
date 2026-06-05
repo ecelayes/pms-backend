@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"github.com/ecelayes/pms-backend/internal/catalog/domain"
 	"github.com/ecelayes/pms-backend/internal/shared/vo"
 	"github.com/jackc/pgx/v5"
@@ -62,8 +63,8 @@ func (r *PostgresAmenityRepository) FindByID(ctx context.Context, id string) (*d
 	var vid, name, desc, icon string
 	err := r.db.QueryRow(ctx, query, id).Scan(&vid, &name, &desc, &icon)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
 		}
 		return nil, err
 	}
@@ -135,8 +136,8 @@ func (r *PostgresGuestServiceRepository) FindGuestServiceByID(ctx context.Contex
 	var vid, name, desc, icon string
 	err := r.db.QueryRow(ctx, query, id).Scan(&vid, &name, &desc, &icon)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
 		}
 		return nil, err
 	}
@@ -157,8 +158,8 @@ func (r *PostgresCatalogRepository) FindPropertyByID(ctx context.Context, id str
 	query := `SELECT organization_id, name, code, type, created_at FROM properties WHERE id=$1`
 	err := r.db.QueryRow(ctx, query, id).Scan(&orgID, &name, &code, &pTypeStr, &createdAt)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
 		}
 		return nil, err
 	}
@@ -233,8 +234,8 @@ func (r *PostgresCatalogRepository) FindUnitTypeByID(ctx context.Context, id str
 		&maxOcc, &maxAd, &maxCh, &amenities, &createdAt,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
 		}
 		return nil, err
 	}
@@ -295,8 +296,8 @@ func (r *PostgresCatalogRepository) FindUnitByID(ctx context.Context, id string)
 	var createdAt time.Time
 	err := r.db.QueryRow(ctx, query, id).Scan(&propID, &typeID, &name, &status, &createdAt)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
 		}
 		return nil, err
 	}

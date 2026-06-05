@@ -30,8 +30,9 @@ func (s *AvailabilityService) Search(ctx context.Context, propertyID string, sta
 	if err != nil {
 		return nil, err
 	}
-	var results []dto.AvailabilityResult
-	var dates []time.Time
+	results := make([]dto.AvailabilityResult, 0, len(unitTypes))
+	days := int(end.Sub(start).Hours()/24) + 1
+	dates := make([]time.Time, 0, days)
 	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
 		dates = append(dates, d)
 	}
@@ -87,7 +88,8 @@ func (s *AvailabilityService) Search(ctx context.Context, propertyID string, sta
 }
 
 func (s *AvailabilityService) UpdateInventory(ctx context.Context, propertyID, unitTypeID string, start, end time.Time, delta int) error {
-	var dates []time.Time
+	days := int(end.Sub(start).Hours()/24) + 1
+	dates := make([]time.Time, 0, days)
 	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {
 		dates = append(dates, d)
 	}

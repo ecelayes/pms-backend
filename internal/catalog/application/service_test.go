@@ -16,8 +16,7 @@ type mockPropertyRepo struct {
 	saveErr        error
 	findErr        error
 	deleteErr      error
-	countResult    int64
-}
+	}
 
 func (m *mockPropertyRepo) SaveProperty(ctx context.Context, p *domain.Property) error {
 	return m.saveErr

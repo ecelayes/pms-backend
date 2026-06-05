@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	ErrRequestInvalid = errors.New("request invalid")
+	ErrInvalidProperty = errors.New("invalid property: name and organization are required")
 )
 
 type PropertyType string
@@ -29,7 +29,7 @@ type Property struct {
 
 func NewProperty(organizationID, name, code string, pType PropertyType) (*Property, error) {
 	if name == "" || code == "" {
-		return nil, ErrRequestInvalid
+		return nil, ErrInvalidProperty
 	}
 	return &Property{
 		id:             uuid.New().String(),

@@ -109,7 +109,7 @@ func (s *PricingService) CalculateStayPrice(
 	}
 	if ratePlanID != "" {
 		rp, err := s.ratePlanRepo.FindByID(ctx, ratePlanID)
-		if err != nil {
+		if err != nil && !errors.Is(err, domain.ErrNotFound) {
 			return vo.Money{}, err
 		}
 		if rp != nil {
@@ -147,22 +147,21 @@ func (s *PricingService) CalculateCancellationPenalty(
 			if !matched {
 				matched = true
 				activeRule = rule
-			} else {
-				if rule.HoursBeforeCheckIn < activeRule.HoursBeforeCheckIn {
-					activeRule = rule
-				}
+			} else if rule.HoursBeforeCheckIn < activeRule.HoursBeforeCheckIn {
+				activeRule = rule
 			}
 		}
 	}
 	if !matched {
 		return vo.NewMoney(0, totalPrice.Currency()), nil
 	}
-	amount := int64(0)
-	if activeRule.PenaltyType == domain.PenaltyFixedAmount {
+	var amount int64
+	switch activeRule.PenaltyType {
+	case domain.PenaltyFixedAmount:
 		amount = activeRule.PenaltyValue
-	} else if activeRule.PenaltyType == domain.PenaltyPercentage {
+	case domain.PenaltyPercentage:
 		amount = totalPrice.Amount() * activeRule.PenaltyValue / 100
-	} else if activeRule.PenaltyType == domain.PenaltyNights {
+	case domain.PenaltyNights:
 		return vo.Money{}, errors.New("nights penalty not supported yet")
 	}
 	return vo.NewMoney(amount, totalPrice.Currency()), nil

@@ -260,9 +260,27 @@ func TestAuthService_ResetPassword_Success(t *testing.T) {
 	// Pass a valid-format token
 	token, _ := auth.NewJWTTokenGenerator().GenerateResetToken(user.ID(), user.Salt())
 	_ = token
-	err := svc.ResetPassword(context.Background(), "valid-token", "newpassword")
+	err := svc.ResetPassword(context.Background(), "valid-token", "Good.Pass1")
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestAuthService_ResetPassword_RejectsWeakPassword(t *testing.T) {
+	user := domain.ReconstituteUser("user-1", "test@test.com", "hashed", "salt", string(domain.RoleUser), "John", "Doe", "", time.Now())
+	repo := &mockUserRepo{findByIDResult: user}
+	hasher := &mockPasswordHasher{}
+	tg := &mockTokenGenerator{
+		parseUnsafeResult: &auth.Claims{UserID: user.ID(), Purpose: auth.PurposeReset},
+		verifySigResult:   &auth.Claims{UserID: user.ID(), Purpose: auth.PurposeReset},
+	}
+	sg := &mockSaltGenerator{}
+	svc := NewAuthService(repo, nil, nil, hasher, tg, sg)
+	for _, p := range []string{"", "short", "password123"} {
+		err := svc.ResetPassword(context.Background(), "valid-token", p)
+		if !errors.Is(err, ErrWeakPassword) {
+			t.Errorf("expected ErrWeakPassword for %q, got %v", p, err)
+		}
 	}
 }
 
@@ -279,7 +297,7 @@ func TestAuthService_ResetPassword_InvalidSignature(t *testing.T) {
 	sg := &mockSaltGenerator{generateRes: "salt"}
 	svc := NewAuthService(repo, nil, nil, hasher, tg, sg)
 
-	err := svc.ResetPassword(context.Background(), "valid-token", "newpassword")
+	err := svc.ResetPassword(context.Background(), "valid-token", "Good.Pass1")
 	if err == nil {
 		t.Error("Expected error for invalid signature")
 	}
@@ -298,7 +316,7 @@ func TestAuthService_ResetPassword_HashError(t *testing.T) {
 	sg := &mockSaltGenerator{generateRes: "salt"}
 	svc := NewAuthService(repo, nil, nil, hasher, tg, sg)
 
-	err := svc.ResetPassword(context.Background(), "valid-token", "newpassword")
+	err := svc.ResetPassword(context.Background(), "valid-token", "Good.Pass1")
 	if err == nil {
 		t.Error("Expected hash error")
 	}
@@ -317,7 +335,7 @@ func TestAuthService_ResetPassword_SaltError(t *testing.T) {
 	sg := &mockSaltGenerator{generateErr: errors.New("salt error")}
 	svc := NewAuthService(repo, nil, nil, hasher, tg, sg)
 
-	err := svc.ResetPassword(context.Background(), "valid-token", "newpassword")
+	err := svc.ResetPassword(context.Background(), "valid-token", "Good.Pass1")
 	if err == nil {
 		t.Error("Expected salt error")
 	}
@@ -336,7 +354,7 @@ func TestAuthService_ResetPassword_SaveError(t *testing.T) {
 	sg := &mockSaltGenerator{generateRes: "salt"}
 	svc := NewAuthService(repo, nil, nil, hasher, tg, sg)
 
-	err := svc.ResetPassword(context.Background(), "valid-token", "newpassword")
+	err := svc.ResetPassword(context.Background(), "valid-token", "Good.Pass1")
 	if err == nil {
 		t.Error("Expected save error")
 	}
@@ -351,7 +369,7 @@ func TestAuthService_ResetPassword_FindByIDError(t *testing.T) {
 	sg := &mockSaltGenerator{generateRes: "salt"}
 	svc := NewAuthService(repo, nil, nil, hasher, tg, sg)
 
-	err := svc.ResetPassword(context.Background(), "valid-token", "newpassword")
+	err := svc.ResetPassword(context.Background(), "valid-token", "Good.Pass1")
 	if err == nil {
 		t.Error("Expected find error")
 	}
@@ -366,7 +384,7 @@ func TestAuthService_ResetPassword_UserNil(t *testing.T) {
 	sg := &mockSaltGenerator{generateRes: "salt"}
 	svc := NewAuthService(repo, nil, nil, hasher, tg, sg)
 
-	err := svc.ResetPassword(context.Background(), "valid-token", "newpassword")
+	err := svc.ResetPassword(context.Background(), "valid-token", "Good.Pass1")
 	if err == nil {
 		t.Error("Expected user not found error")
 	}

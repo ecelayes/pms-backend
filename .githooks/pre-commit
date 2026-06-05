@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Pre-commit hook: lint + format check + build verification
+# Install: git config core.hooksPath .githooks
+
+set -e
+
+echo "==> Running pre-commit checks..."
+
+echo "==> go build ./..."
+go build ./...
+
+echo "==> go vet ./..."
+go vet ./...
+
+if command -v golangci-lint &> /dev/null; then
+    echo "==> golangci-lint run ./..."
+    golangci-lint run ./...
+else
+    echo "==> golangci-lint not found; skipping lint (install with: make lint-install)"
+fi
+
+if command -v gofmt &> /dev/null; then
+    echo "==> gofmt check"
+    unformatted=$(gofmt -l .)
+    if [ -n "$unformatted" ]; then
+        echo "Unformatted files:"
+        echo "$unformatted"
+        exit 1
+    fi
+fi
+
+echo "==> All pre-commit checks passed."

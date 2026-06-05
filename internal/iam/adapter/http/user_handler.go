@@ -2,11 +2,14 @@ package http
 
 import (
 	"errors"
-	"github.com/ecelayes/pms-backend/internal/iam/application"
-	"github.com/ecelayes/pms-backend/internal/shared/dto"
-	"github.com/labstack/echo/v4"
 	"net/http"
 	"strings"
+
+	"github.com/ecelayes/pms-backend/internal/iam/application"
+	sharedHTTP "github.com/ecelayes/pms-backend/internal/shared/adapter/http"
+	sharedContext "github.com/ecelayes/pms-backend/internal/shared/context"
+	"github.com/ecelayes/pms-backend/internal/shared/dto"
+	"github.com/labstack/echo/v4"
 )
 
 type UserHandler struct {
@@ -48,13 +51,19 @@ func (h *UserHandler) Create(c echo.Context) error {
 	if req.Password == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "password is required"})
 	}
+	if err := sharedHTTP.ValidateEmail(req.Email); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
 	id, err := h.service.Register(
-		c.Request().Context(),
+		sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)),
 		req.OrganizationID,
 		req.Email, req.Password, req.Role,
 		req.FirstName, req.LastName, req.Phone,
 	)
 	if err != nil {
+		if errors.Is(err, application.ErrWeakPassword) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
 			return c.JSON(http.StatusConflict, map[string]string{"error": "user already exists"})
 		}
@@ -67,14 +76,17 @@ func (h *UserHandler) Create(c echo.Context) error {
 }
 func (h *UserHandler) GetAll(c echo.Context) error {
 	orgID := c.QueryParam("organization_id")
-	if orgID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "organization_id is required"})
+	if err := sharedHTTP.ValidateRequired("organization_id", orgID); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
-	users, err := h.service.GetAll(c.Request().Context(), orgID)
+	if err := sharedHTTP.ValidateUUID(orgID); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	users, err := h.service.GetAll(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), orgID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	var dtos []dto.User
+	dtos := make([]dto.User, 0, len(users))
 	for _, u := range users {
 		dtos = append(dtos, dto.User{
 			ID:        u.ID(),
@@ -96,7 +108,10 @@ func (h *UserHandler) GetAll(c echo.Context) error {
 }
 func (h *UserHandler) GetByID(c echo.Context) error {
 	id := c.Param("id")
-	u, err := h.service.GetByID(c.Request().Context(), id)
+	if err := sharedHTTP.ValidateUUID(id); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	u, err := h.service.GetByID(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id)
 	if err != nil {
 		if errors.Is(err, application.ErrUserNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "user not found"})
@@ -118,7 +133,7 @@ func (h *UserHandler) Update(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
 	err := h.service.Update(
-		c.Request().Context(), id,
+		sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id,
 		req.Role, req.FirstName, req.LastName, req.Phone,
 	)
 	if err != nil {
@@ -131,7 +146,7 @@ func (h *UserHandler) Update(c echo.Context) error {
 }
 func (h *UserHandler) Delete(c echo.Context) error {
 	id := c.Param("id")
-	if err := h.service.Delete(c.Request().Context(), id); err != nil {
+	if err := h.service.Delete(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id); err != nil {
 		if errors.Is(err, application.ErrUserNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "user not found"})
 		}

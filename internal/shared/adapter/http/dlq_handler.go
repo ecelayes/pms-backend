@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/ecelayes/pms-backend/internal/shared/adapter/redis"
+	sharedContext "github.com/ecelayes/pms-backend/internal/shared/context"
 	"github.com/labstack/echo/v4"
 )
 
@@ -15,9 +16,9 @@ func NewDLQHandler(store *redis.DLQStore) *DLQHandler {
 	return &DLQHandler{store: store}
 }
 
-// GET /admin/dlq/stats - Get DLQ statistics
+// GetStats returns DLQ statistics.
 func (h *DLQHandler) GetStats(c echo.Context) error {
-	ctx := c.Request().Context()
+	ctx := sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c))
 
 	stats, err := h.store.GetStats(ctx)
 	if err != nil {
@@ -29,9 +30,9 @@ func (h *DLQHandler) GetStats(c echo.Context) error {
 	return c.JSON(http.StatusOK, stats)
 }
 
-// GET /admin/dlq/messages?limit=100 - Get DLQ messages
+// GetMessages returns DLQ messages.
 func (h *DLQHandler) GetMessages(c echo.Context) error {
-	ctx := c.Request().Context()
+	ctx := sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c))
 
 	limit := int64(100)
 	stats, err := h.store.GetMessages(ctx, limit)
@@ -44,9 +45,9 @@ func (h *DLQHandler) GetMessages(c echo.Context) error {
 	return c.JSON(http.StatusOK, stats)
 }
 
-// DELETE /admin/dlq/messages/:id - Remove a message from DLQ
+// DeleteMessage removes a single message from the DLQ.
 func (h *DLQHandler) DeleteMessage(c echo.Context) error {
-	ctx := c.Request().Context()
+	ctx := sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c))
 	messageID := c.Param("id")
 
 	deleted, err := h.store.DeleteMessage(ctx, messageID)
@@ -72,9 +73,9 @@ func (h *DLQHandler) DeleteMessage(c echo.Context) error {
 	})
 }
 
-// DELETE /admin/dlq/purge - Purge all DLQ messages
+// PurgeDLQ removes all messages from the DLQ.
 func (h *DLQHandler) PurgeDLQ(c echo.Context) error {
-	ctx := c.Request().Context()
+	ctx := sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c))
 
 	deleted, err := h.store.Purge(ctx)
 	if err != nil {

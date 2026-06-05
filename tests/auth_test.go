@@ -71,7 +71,7 @@ func (s *AuthSuite) TestPasswordResetFlow() {
 	resetToken, err := auth.NewJWTTokenGenerator().GenerateResetToken(userID.String(), currentSalt)
 	s.Require().NoError(err)
 
-	newPass := "newpass123"
+	newPass := "NewStrong.Pass1"
 	resReset := s.MakeRequest("POST", "/api/v1/auth/reset-password", map[string]string{
 		"token": resetToken,
 		"new_password": newPass,

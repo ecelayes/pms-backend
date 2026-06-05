@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, 'refactor/**', 'feature/**']
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Verify dependencies
+        run: go mod download
+        shell: bash
+
+      - name: Verify build
+        run: go build ./...
+        shell: bash
+
+      - name: Run go vet
+        run: go vet ./...
+        shell: bash
+
+      - name: Run unit tests
+        run: go test -race -timeout 60s -coverprofile=coverage.out ./...
+        shell: bash
+
+      - name: Enforce minimum coverage
+        run: |
+          total=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Total coverage: ${total}%"
+          awk -v t=$total 'BEGIN { exit !(t >= 80.0) }' || (echo "Coverage ${total}% is below 80%" && exit 1)
+        shell: bash
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.64.8
+        shell: bash
+
+      - name: Run linter
+        run: golangci-lint run ./...
+        shell: bash
+
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: moshk
+          POSTGRES_PASSWORD: X25Rc0254dG0232O540iRKF2o02121
+          POSTGRES_DB: pms_db_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U moshk"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://moshk:X25Rc0254dG0232O540iRKF2o02121@localhost:5432/pms_db_test?sslmode=disable
+      TEST_DATABASE_URL: postgres://moshk:X25Rc0254dG0232O540iRKF2o02121@localhost:5432/pms_db_test?sslmode=disable
+      TEST_REDIS_ADDR: localhost:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Install migrate CLI
+        run: |
+          curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.1/migrate.linux-amd64.tar.gz | tar xvz
+          sudo mv migrate /usr/local/bin/migrate
+        shell: bash
+
+      - name: Run migrations
+        run: make db-setup DB_NAME=pms_db_test
+        shell: bash
+
+      - name: Run integration tests
+        run: go test -count=1 -timeout=120s ./tests/...
+        shell: bash

@@ -186,7 +186,7 @@ func TestUserHandler_GetAll_MissingOrgID(t *testing.T) {
 
 func TestUserHandler_GetAll_Empty(t *testing.T) {
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/users?organization_id=o1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/users?organization_id=550e8400-e29b-41d4-a716-446655440000", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -201,7 +201,7 @@ func TestUserHandler_GetAll_Empty(t *testing.T) {
 
 func TestUserHandler_GetAll_Success(t *testing.T) {
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/users?organization_id=o1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/users?organization_id=550e8400-e29b-41d4-a716-446655440000", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -217,7 +217,7 @@ func TestUserHandler_GetAll_Success(t *testing.T) {
 
 func TestUserHandler_GetAll_Error(t *testing.T) {
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/users?organization_id=o1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/users?organization_id=550e8400-e29b-41d4-a716-446655440000", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -230,13 +230,31 @@ func TestUserHandler_GetAll_Error(t *testing.T) {
 	}
 }
 
-func TestUserHandler_GetByID_Success(t *testing.T) {
+func TestUserHandler_GetByID_InvalidUUID(t *testing.T) {
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/users/u1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/users/not-a-uuid", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
-	c.SetParamValues("u1")
+	c.SetParamValues("not-a-uuid")
+
+	h := NewUserHandler(&mockUserService{})
+	err := h.GetByID(c)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestUserHandler_GetByID_Success(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/users/550e8400-e29b-41d4-a716-446655440000", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("550e8400-e29b-41d4-a716-446655440000")
 
 	user, _ := domain.NewUser("test@test.com", "hashed", "salt", "manager", "John", "Doe", "123")
 	svc := &mockUserService{getByIDResult: user}
@@ -250,11 +268,11 @@ func TestUserHandler_GetByID_Success(t *testing.T) {
 
 func TestUserHandler_GetByID_NotFound(t *testing.T) {
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/users/u1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/users/550e8400-e29b-41d4-a716-446655440000", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
-	c.SetParamValues("u1")
+	c.SetParamValues("550e8400-e29b-41d4-a716-446655440000")
 
 	svc := &mockUserService{getByIDErr: application.ErrUserNotFound}
 	h := NewUserHandler(svc)
@@ -267,11 +285,11 @@ func TestUserHandler_GetByID_NotFound(t *testing.T) {
 
 func TestUserHandler_GetByID_Error(t *testing.T) {
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/users/u1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/users/550e8400-e29b-41d4-a716-446655440000", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
-	c.SetParamValues("u1")
+	c.SetParamValues("550e8400-e29b-41d4-a716-446655440000")
 
 	svc := &mockUserService{getByIDErr: errors.New("db error")}
 	h := NewUserHandler(svc)
@@ -285,12 +303,12 @@ func TestUserHandler_GetByID_Error(t *testing.T) {
 func TestUserHandler_Update_Success(t *testing.T) {
 	e := echo.New()
 	reqBody := `{"role":"manager","first_name":"Jane","last_name":"Smith","phone":"456"}`
-	req := httptest.NewRequest(http.MethodPut, "/users/u1", strings.NewReader(reqBody))
+	req := httptest.NewRequest(http.MethodPut, "/users/550e8400-e29b-41d4-a716-446655440000", strings.NewReader(reqBody))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
-	c.SetParamValues("u1")
+	c.SetParamValues("550e8400-e29b-41d4-a716-446655440000")
 
 	svc := &mockUserService{}
 	h := NewUserHandler(svc)
@@ -320,12 +338,12 @@ func TestUserHandler_Update_InvalidJSON(t *testing.T) {
 func TestUserHandler_Update_NotFound(t *testing.T) {
 	e := echo.New()
 	reqBody := `{"role":"manager","first_name":"Jane","last_name":"Smith","phone":"456"}`
-	req := httptest.NewRequest(http.MethodPut, "/users/u1", strings.NewReader(reqBody))
+	req := httptest.NewRequest(http.MethodPut, "/users/550e8400-e29b-41d4-a716-446655440000", strings.NewReader(reqBody))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
-	c.SetParamValues("u1")
+	c.SetParamValues("550e8400-e29b-41d4-a716-446655440000")
 
 	svc := &mockUserService{updateErr: application.ErrUserNotFound}
 	h := NewUserHandler(svc)
@@ -339,12 +357,12 @@ func TestUserHandler_Update_NotFound(t *testing.T) {
 func TestUserHandler_Update_Error(t *testing.T) {
 	e := echo.New()
 	reqBody := `{"role":"manager","first_name":"Jane","last_name":"Smith","phone":"456"}`
-	req := httptest.NewRequest(http.MethodPut, "/users/u1", strings.NewReader(reqBody))
+	req := httptest.NewRequest(http.MethodPut, "/users/550e8400-e29b-41d4-a716-446655440000", strings.NewReader(reqBody))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
-	c.SetParamValues("u1")
+	c.SetParamValues("550e8400-e29b-41d4-a716-446655440000")
 
 	svc := &mockUserService{updateErr: errors.New("db error")}
 	h := NewUserHandler(svc)
@@ -357,11 +375,11 @@ func TestUserHandler_Update_Error(t *testing.T) {
 
 func TestUserHandler_Delete_Success(t *testing.T) {
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodDelete, "/users/u1", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/users/550e8400-e29b-41d4-a716-446655440000", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
-	c.SetParamValues("u1")
+	c.SetParamValues("550e8400-e29b-41d4-a716-446655440000")
 
 	svc := &mockUserService{}
 	h := NewUserHandler(svc)
@@ -374,11 +392,11 @@ func TestUserHandler_Delete_Success(t *testing.T) {
 
 func TestUserHandler_Delete_NotFound(t *testing.T) {
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodDelete, "/users/u1", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/users/550e8400-e29b-41d4-a716-446655440000", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
-	c.SetParamValues("u1")
+	c.SetParamValues("550e8400-e29b-41d4-a716-446655440000")
 
 	svc := &mockUserService{deleteErr: application.ErrUserNotFound}
 	h := NewUserHandler(svc)
@@ -391,11 +409,11 @@ func TestUserHandler_Delete_NotFound(t *testing.T) {
 
 func TestUserHandler_Delete_Error(t *testing.T) {
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodDelete, "/users/u1", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/users/550e8400-e29b-41d4-a716-446655440000", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetParamNames("id")
-	c.SetParamValues("u1")
+	c.SetParamValues("550e8400-e29b-41d4-a716-446655440000")
 
 	svc := &mockUserService{deleteErr: errors.New("db error")}
 	h := NewUserHandler(svc)

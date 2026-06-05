@@ -31,8 +31,8 @@ func TestNewProperty(t *testing.T) {
 func TestNewPropertyEmptyName(t *testing.T) {
 	prop, err := NewProperty("org-123", "", "BR", PropertyTypeHotel)
 	
-	if err != ErrRequestInvalid {
-		t.Errorf("Expected ErrRequestInvalid, got %v", err)
+	if err != ErrInvalidProperty {
+		t.Errorf("Expected ErrInvalidProperty, got %v", err)
 	}
 	if prop != nil {
 		t.Error("Expected nil Property on invalid name")
@@ -42,8 +42,8 @@ func TestNewPropertyEmptyName(t *testing.T) {
 func TestNewPropertyEmptyCode(t *testing.T) {
 	prop, err := NewProperty("org-123", "Beach Resort", "", PropertyTypeHotel)
 	
-	if err != ErrRequestInvalid {
-		t.Errorf("Expected ErrRequestInvalid, got %v", err)
+	if err != ErrInvalidProperty {
+		t.Errorf("Expected ErrInvalidProperty, got %v", err)
 	}
 	if prop != nil {
 		t.Error("Expected nil Property on invalid code")

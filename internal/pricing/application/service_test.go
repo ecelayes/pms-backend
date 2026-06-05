@@ -11,6 +11,7 @@ import (
 	"github.com/ecelayes/pms-backend/internal/shared/vo"
 )
 
+//nolint:staticcheck
 func TestNewPricingService(t *testing.T) {
 	svc := NewPricingService(nil, nil)
 	if svc == nil {

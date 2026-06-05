@@ -2,18 +2,19 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strconv"
 	"time"
 
 	"github.com/ecelayes/pms-backend/internal/shared/domain"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
-// StreamMessage is the message envelope used by StreamProducer/Consumer.
-type StreamMessage = domain.StreamMessage
+// EventChannelPrefix is the prefix used for Redis Pub/Sub event channels.
+const EventChannelPrefix = "events:"
 
 // Stream/group names. These are implementation details of the Redis adapter
 // and intentionally NOT exposed via the domain ports.
@@ -26,15 +27,22 @@ const (
 	MaxRetries         = 3
 )
 
+// StreamMessage is the message envelope used by StreamProducer/Consumer.
+type StreamMessage = domain.StreamMessage
+
 // StreamProducer implements domain.StreamProducer using Redis Streams.
 type StreamProducer struct {
 	client *redis.Client
+	logger *zap.Logger
 }
 
 var _ domain.StreamProducer = (*StreamProducer)(nil)
 
-func NewStreamProducer(client *redis.Client) *StreamProducer {
-	return &StreamProducer{client: client}
+func NewStreamProducer(client *redis.Client, logger *zap.Logger) *StreamProducer {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+	return &StreamProducer{client: client, logger: logger}
 }
 
 func (p *StreamProducer) PublishReservationCreated(ctx context.Context, payload domain.ReservationCreatedPayload) error {
@@ -63,7 +71,9 @@ func (p *StreamProducer) addToStream(ctx context.Context, eventType string, payl
 	if err != nil {
 		return fmt.Errorf("failed to XADD to stream: %w", err)
 	}
-	log.Printf("[StreamProducer] Added event %s to stream %s", eventType, StreamReservations)
+	p.logger.Info("added event to stream",
+		zap.String("event_type", eventType),
+		zap.String("stream", StreamReservations))
 	return nil
 }
 
@@ -75,7 +85,9 @@ func (p *StreamProducer) EnsureGroups(ctx context.Context) error {
 			return fmt.Errorf("failed to create group %s: %w", group, err)
 		}
 	}
-	log.Printf("[StreamProducer] Ensured all consumer groups exist")
+	p.logger.Info("ensured all consumer groups exist",
+		zap.String("stream", StreamReservations),
+		zap.Strings("groups", groups))
 	return nil
 }
 
@@ -84,15 +96,20 @@ type StreamConsumer struct {
 	client       *redis.Client
 	groupName    string
 	consumerName string
+	logger       *zap.Logger
 }
 
 var _ domain.StreamConsumer = (*StreamConsumer)(nil)
 
-func NewStreamConsumer(client *redis.Client, groupName, consumerName string) *StreamConsumer {
+func NewStreamConsumer(client *redis.Client, groupName, consumerName string, logger *zap.Logger) *StreamConsumer {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	return &StreamConsumer{
 		client:       client,
 		groupName:    groupName,
 		consumerName: consumerName,
+		logger:       logger,
 	}
 }
 
@@ -100,7 +117,9 @@ func (c *StreamConsumer) Consume(ctx context.Context, eventTypes []string, handl
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("[StreamConsumer] Context cancelled, stopping consumer %s", c.consumerName)
+			c.logger.Info("context cancelled, stopping consumer",
+				zap.String("consumer", c.consumerName),
+				zap.String("group", c.groupName))
 			return
 		default:
 			c.readAndProcess(ctx, eventTypes, handler)
@@ -117,10 +136,12 @@ func (c *StreamConsumer) readAndProcess(ctx context.Context, eventTypes []string
 		Block:    2 * time.Second,
 	}).Result()
 	if err != nil {
-		if err == redis.Nil {
+		if errors.Is(err, redis.Nil) {
 			return
 		}
-		log.Printf("[StreamConsumer] XReadGroup error: %v", err)
+		c.logger.Error("XReadGroup error",
+			zap.String("consumer", c.consumerName),
+			zap.Error(err))
 		time.Sleep(100 * time.Millisecond)
 		return
 	}
@@ -139,7 +160,10 @@ func (c *StreamConsumer) readAndProcess(ctx context.Context, eventTypes []string
 				Retries:   0,
 			}
 			if err := handler(msg); err != nil {
-				log.Printf("[StreamConsumer] Handler error for %s: %v", msg.ID, err)
+				c.logger.Error("handler error",
+					zap.String("message_id", msg.ID),
+					zap.String("event_type", eventType),
+					zap.Error(err))
 				retryStr, ok := message.Values["retry_count"].(string)
 				if ok {
 					retryCount, _ := strconv.Atoi(retryStr)
@@ -148,7 +172,9 @@ func (c *StreamConsumer) readAndProcess(ctx context.Context, eventTypes []string
 				if msg.Retries >= MaxRetries {
 					c.moveToDLQ(ctx, msg)
 					c.ackMessage(ctx, message.ID)
-					log.Printf("[StreamConsumer] Message %s moved to DLQ after %d retries", msg.ID, msg.Retries)
+					c.logger.Warn("message moved to DLQ",
+						zap.String("message_id", msg.ID),
+						zap.Int("retries", msg.Retries))
 				} else {
 					c.nackWithRetry(ctx, msg)
 				}
@@ -162,7 +188,9 @@ func (c *StreamConsumer) readAndProcess(ctx context.Context, eventTypes []string
 func (c *StreamConsumer) ackMessage(ctx context.Context, messageID string) {
 	err := c.client.XAck(ctx, StreamReservations, c.groupName, messageID).Err()
 	if err != nil {
-		log.Printf("[StreamConsumer] XACK error for %s: %v", messageID, err)
+		c.logger.Error("XACK error",
+			zap.String("message_id", messageID),
+			zap.Error(err))
 	}
 }
 
@@ -177,9 +205,13 @@ func (c *StreamConsumer) nackWithRetry(ctx context.Context, msg *StreamMessage) 
 		Messages: []string{msg.ID},
 	}).Result()
 	if err != nil {
-		log.Printf("[StreamConsumer] XCLAIM error for %s: %v", msg.ID, err)
+		c.logger.Error("XCLAIM error",
+			zap.String("message_id", msg.ID),
+			zap.Error(err))
 	} else {
-		log.Printf("[StreamConsumer] Requeued message %s (retry %d)", msg.ID, newRetry)
+		c.logger.Info("message requeued",
+			zap.String("message_id", msg.ID),
+			zap.Int("retry", newRetry))
 	}
 }
 
@@ -195,7 +227,9 @@ func (c *StreamConsumer) moveToDLQ(ctx context.Context, msg *StreamMessage) {
 		},
 	}).Result()
 	if err != nil {
-		log.Printf("[StreamConsumer] Failed to add message to DLQ: %v", err)
+		c.logger.Error("failed to add message to DLQ",
+			zap.String("message_id", msg.ID),
+			zap.Error(err))
 	}
 }
 

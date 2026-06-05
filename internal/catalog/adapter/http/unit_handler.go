@@ -5,6 +5,7 @@ import (
 	"github.com/ecelayes/pms-backend/internal/catalog/application"
 	"github.com/ecelayes/pms-backend/internal/catalog/domain"
 	"github.com/ecelayes/pms-backend/internal/shared/dto"
+	sharedContext "github.com/ecelayes/pms-backend/internal/shared/context"
 	"github.com/labstack/echo/v4"
 	"math"
 	"net/http"
@@ -24,7 +25,7 @@ func (h *UnitHandler) Create(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	id, err := h.service.CreateUnit(c.Request().Context(), req.PropertyID, req.UnitTypeID, req.Name)
+	id, err := h.service.CreateUnit(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), req.PropertyID, req.UnitTypeID, req.Name)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
 			return c.JSON(http.StatusConflict, map[string]string{"error": "unit with this name already exists"})
@@ -45,7 +46,7 @@ func (h *UnitHandler) GetAll(c echo.Context) error {
 	if l, err := strconv.Atoi(c.QueryParam("limit")); err == nil && l > 0 {
 		limit = l
 	}
-	units, totalCount, err := h.service.ListUnits(c.Request().Context(), propertyID, page, limit)
+	units, totalCount, err := h.service.ListUnits(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), propertyID, page, limit)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -67,7 +68,7 @@ func (h *UnitHandler) GetAll(c echo.Context) error {
 }
 func (h *UnitHandler) GetByID(c echo.Context) error {
 	id := c.Param("id")
-	u, err := h.service.GetUnit(c.Request().Context(), id)
+	u, err := h.service.GetUnit(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id)
 	if err != nil {
 		if errors.Is(err, application.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "unit not found"})
@@ -82,7 +83,7 @@ func (h *UnitHandler) Update(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	if err := h.service.UpdateUnit(c.Request().Context(), id, req.Name, req.Status); err != nil {
+	if err := h.service.UpdateUnit(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id, req.Name, req.Status); err != nil {
 		if errors.Is(err, application.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "unit not found"})
 		}
@@ -92,7 +93,7 @@ func (h *UnitHandler) Update(c echo.Context) error {
 }
 func (h *UnitHandler) Delete(c echo.Context) error {
 	id := c.Param("id")
-	if err := h.service.DeleteUnit(c.Request().Context(), id); err != nil {
+	if err := h.service.DeleteUnit(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
 	return c.JSON(http.StatusOK, map[string]string{"message": "unit deleted"})

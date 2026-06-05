@@ -6,6 +6,7 @@ import (
 	"github.com/ecelayes/pms-backend/internal/pricing/domain"
 	"github.com/ecelayes/pms-backend/internal/shared/dto"
 	"github.com/ecelayes/pms-backend/internal/shared/vo"
+	sharedContext "github.com/ecelayes/pms-backend/internal/shared/context"
 	"github.com/labstack/echo/v4"
 	"net/http"
 	"strings"
@@ -49,7 +50,7 @@ func (h *PricingHandler) BulkUpdate(c echo.Context) error {
 	}
 	priceCents := int64(req.Price * 100)
 	price := vo.NewMoney(priceCents, req.Currency)
-	if err := h.service.SetPriceRule(c.Request().Context(), req.UnitTypeID, start, end, price); err != nil {
+	if err := h.service.SetPriceRule(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), req.UnitTypeID, start, end, price); err != nil {
 		if errors.Is(err, vo.ErrinvalidDateRange) || strings.Contains(err.Error(), vo.ErrinvalidDateRange.Error()) {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
@@ -63,7 +64,7 @@ func (h *PricingHandler) GetRules(c echo.Context) error {
 	if unitTypeID == "" && propertyID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "unit_type_id or property_id is required"})
 	}
-	rules, err := h.service.GetRules(c.Request().Context(), propertyID, unitTypeID)
+	rules, err := h.service.GetRules(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), propertyID, unitTypeID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -91,7 +92,7 @@ func (h *PricingHandler) GetRules(c echo.Context) error {
 }
 func (h *PricingHandler) DeleteRule(c echo.Context) error {
 	id := c.Param("id")
-	if err := h.service.DeleteRule(c.Request().Context(), id); err != nil {
+	if err := h.service.DeleteRule(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id); err != nil {
 		if errors.Is(err, application.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
 		}

@@ -15,6 +15,7 @@ import (
 	"github.com/ecelayes/pms-backend/internal/bootstrap"
 	"github.com/ecelayes/pms-backend/pkg/auth"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 type BaseSuite struct {
@@ -38,7 +39,7 @@ func (s *BaseSuite) SetupSuite() {
 	rdb := redis.NewClient(&redis.Options{
 		Addr: redisAddr,
 	})
-	s.echo = bootstrap.NewApp(pool, rdb)
+	s.echo = bootstrap.NewApp(pool, rdb, zap.NewNop())
 }
 
 func (s *BaseSuite) TearDownSuite() { s.db.Close() }

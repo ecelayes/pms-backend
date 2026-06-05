@@ -65,3 +65,41 @@ test-all: test
 		export TEST_DATABASE_URL=postgres://$$DB_USER:$$DB_PASSWORD@$$DB_HOST:$$DB_PORT/$$DB_TEST_NAME?sslmode=disable; \
 		export TEST_REDIS_ADDR=$${TEST_REDIS_ADDR:-localhost:6379}; \
 		go test -count=1 -timeout=120s ./tests/...
+
+
+# ───────────────────────────────────────────────────────────
+# Linting
+# ───────────────────────────────────────────────────────────
+.PHONY: lint
+lint:
+	@if ! command -v golangci-lint >/dev/null 2>&1; then \
+		echo "golangci-lint not installed. Run: make lint-install"; \
+		exit 1; \
+	fi
+	golangci-lint run ./...
+
+.PHONY: lint-install
+lint-install:
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+.PHONY: lint-fix
+lint-fix:
+	@if ! command -v golangci-lint >/dev/null 2>&1; then \
+		echo "golangci-lint not installed. Run: make lint-install"; \
+		exit 1; \
+	fi
+	golangci-lint run --fix ./...
+
+.PHONY: vet
+vet:
+	go vet ./...
+
+.PHONY: install-hooks
+install-hooks:
+	git config core.hooksPath .githooks
+	@echo "Pre-commit hooks installed. They run on every commit."
+
+.PHONY: uninstall-hooks
+uninstall-hooks:
+	git config --unset core.hooksPath
+	@echo "Pre-commit hooks removed."

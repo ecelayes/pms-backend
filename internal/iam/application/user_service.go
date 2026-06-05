@@ -39,6 +39,15 @@ func NewUserService(
 }
 
 func (s *UserService) Register(ctx context.Context, orgID, email, password, role, firstName, lastName, phone string) (string, error) {
+	if _, err := domain.NewPassword(password); err != nil {
+		return "", ErrWeakPassword
+	}
+	return s.registerInternal(ctx, orgID, email, password, role, firstName, lastName, phone)
+}
+
+// registerInternal persists a user without validating password strength.
+// Use this for system-generated credentials (e.g., guest accounts).
+func (s *UserService) registerInternal(ctx context.Context, orgID, email, password, role, firstName, lastName, phone string) (string, error) {
 	salt, err := s.saltGenerator.Generate()
 	if err != nil {
 		return "", err
@@ -73,7 +82,7 @@ func (s *UserService) Register(ctx context.Context, orgID, email, password, role
 
 func (s *UserService) FindOrCreateGuest(ctx context.Context, email, firstName, lastName, phone string) (string, error) {
 	u, err := s.repo.FindByEmail(ctx, email)
-	if err != nil {
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
 		return "", err
 	}
 	if u != nil {
@@ -83,7 +92,7 @@ func (s *UserService) FindOrCreateGuest(ctx context.Context, email, firstName, l
 		return u.ID(), nil
 	}
 	randomPwd, _ := s.saltGenerator.Generate()
-	id, err := s.Register(ctx, "", email, randomPwd, "user", firstName, lastName, phone)
+	id, err := s.registerInternal(ctx, "", email, randomPwd, "user", firstName, lastName, phone)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
 			u, err = s.repo.FindByEmail(ctx, email)
@@ -112,6 +121,9 @@ func (s *UserService) FindOrCreateGuest(ctx context.Context, email, firstName, l
 func (s *UserService) GetByID(ctx context.Context, id string) (*domain.User, error) {
 	u, err := s.repo.FindByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, ErrUserNotFound
+		}
 		return nil, err
 	}
 	if u == nil {

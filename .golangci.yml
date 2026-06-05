@@ -1,0 +1,202 @@
+# golangci-lint configuration for the PMS Backend.
+# To install: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+# To run:     make lint
+# Docs:       https://golangci-lint.run/
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+
+linters:
+  disable-all: true
+  enable:
+    # Default linters (subset of the golangci-lint default set)
+    - errcheck      # Check that error return values are used
+    - gosimple      # Simplify code
+    - govet         # Standard go vet
+    - ineffassign   # Detect ineffectual assignments
+    - staticcheck   # Advanced static analysis
+    - unused        # Detect unused variables/funcs/params
+    - testifylint   # Testify best practices
+
+    # Style
+    - gofmt         # Check gofmt
+    - goimports     # Check goimports
+    - misspell      # Spelling
+    - gocritic      # Style and performance
+    - nakedret      # Detect naked returns
+    - stylecheck    # Style checks
+    - unconvert     # Remove unnecessary conversions
+    - prealloc      # Detect slice preallocation opportunities
+    - dupword       # Detect duplicate words
+
+    # Bugs
+    - bodyclose     # Check HTTP response body is closed
+    - contextcheck  # Check context propagation
+    - nilerr        # Detect `return nil` after handling error
+    - nilnil        # Detect `return nil, nil` patterns
+    - errorlint     # Verify error.Is/As usage
+    - sqlclosecheck # Check sql.Rows/sql.Stmt are closed
+    - containedctx  # Detect context.Context in struct fields
+    - copyloopvar   # Detect loop variable copy issues (replaces exportloopref)
+
+    # Performance
+    - prealloc
+
+    # Security
+    - gosec         # Security issues
+
+    # Concurrency
+    - copyloopvar   # Detect loop variable copy issues
+
+  settings:
+    gocyclo:
+      min-complexity: 15
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+        - experimental
+      disabled-checks:
+        - dupImport # too noisy
+        - ifElseChain # sometimes explicit chains are clearer
+        - wrapperFunc # too noisy
+    revive:
+      rules:
+        - name: var-naming
+          disabled: true
+        - name: error-strings
+          disabled: false
+        - name: error-naming
+          disabled: false
+        - name: error-return
+          disabled: false
+        - name: errorf
+          disabled: false
+        - name: blank-imports
+          disabled: false
+        - name: context-as-argument
+          disabled: false
+        - name: context-keys-type
+          disabled: false
+        - name: dot-imports
+          disabled: true
+        - name: unused-parameter
+          disabled: true
+        - name: package-comments
+          disabled: true
+        - name: max-public-structs
+          disabled: true
+        - name: function-result-limit
+          disabled: true
+    gosec:
+      severity: medium
+      confidence: medium
+      excludes:
+        - G104 # unhandled errors - we use errcheck for that
+        - G404 # insecure random - we use crypto/rand explicitly
+    errorlint:
+      asserts: false
+      comparison: false
+      is: true
+      isparen: true
+      not: true
+      notparen: true
+      comparisonExtends: false
+    govet:
+      enable-all: true
+    testifylint:
+      enable-all: true
+      disable:
+        - require-error
+        - bool-compare
+        - compares
+        - empty
+        - error-is-as
+        - error-nil
+        - expected-actual
+        - go-require
+        - len
+        - nil-compare
+        - regexp
+        - suite-dont-use-pkg
+        - suite-extra-assert-call
+        - suite-subtest-run
+        - useless-assert
+    gofmt:
+      simplify: true
+
+  exclusions:
+    rules:
+      # Test files: relax some rules
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - errcheck
+          - dupl
+          - gosec
+          - gocritic
+          - funlen
+          - goconst
+          - errorlint
+          - nilnil
+          - testifylint
+          - wsl
+          - thelper
+          - wsl
+          - thelper
+      # Generated files
+      - path: \.pb\.go$
+        linters:
+          - all
+      # Vendored code
+      - path: vendor/
+        linters:
+          - all
+      # Mocks
+      - path: mocks?(_test)?\.go$
+        linters:
+          - all
+      # Integration test files (some patterns are acceptable)
+      - path: tests/
+        linters:
+          - errcheck
+          - gosec
+          - gocritic
+      # Logger packages
+      - path: pkg/logger/
+        linters:
+          - forbidigo
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  new-from-rev: ""
+  exclude-use-default: false
+  exclude:
+    - "package-comments"     # Disabled: we don't require package comments
+    - "ST1000"               # Same as above (stylecheck)
+    - "File is not properly formatted"   # Disabled: rely on gofmt in dev
+    - "duplicated-imports"   # gocritic false positive sometimes
+    - "G402"                 # gosec: TLS InsecureSkipWarn - we control the cert config
+    - "G404"                 # gosec: weak rand - we use crypto/rand explicitly
+  exclude-rules:
+    # Allow common patterns
+    - path: _test\.go
+      text: "should not use dot import"
+      linters:
+        - revive
+    - path: _test\.go
+      text: "unused-parameter"
+      linters:
+        - revive
+    - path: cmd/migrate/main\.go
+      linters:
+        - errcheck
+        - gosec
+
+severity:
+  default: warning

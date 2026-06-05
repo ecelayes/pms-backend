@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/ecelayes/pms-backend/internal/pricing/domain"
 	"github.com/ecelayes/pms-backend/internal/shared/vo"
@@ -49,8 +50,8 @@ func (r *PostgresRatePlanRepository) FindByID(ctx context.Context, id string) (*
 		&propID, &unitTypeID, &name, &description, &active, &mealPlan, &cp, &pp, &createdAt,
 	)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
 		}
 		return nil, err
 	}

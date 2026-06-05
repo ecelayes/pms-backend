@@ -25,7 +25,7 @@ func (m *mockAvailabilityRepoForEventHandler) GetBatchInventory(ctx context.Cont
 }
 
 func TestNewEventHandler(t *testing.T) {
-	handler := NewEventHandler(nil)
+	handler := NewEventHandler(nil, nil)
 	if handler == nil {
 		t.Error("Expected non-nil handler")
 	}
@@ -33,7 +33,7 @@ func TestNewEventHandler(t *testing.T) {
 
 func TestEventHandler_HandleStreamMessage_ReservationCreated(t *testing.T) {
 	repo := &mockAvailabilityRepoForEventHandler{}
-	handler := NewEventHandler(repo)
+	handler := NewEventHandler(repo, nil)
 
 	payload := domain.ReservationCreatedPayload{
 		PropertyID:    "prop-1",
@@ -59,7 +59,7 @@ func TestEventHandler_HandleStreamMessage_ReservationCreated(t *testing.T) {
 
 func TestEventHandler_HandleStreamMessage_ReservationConfirmed(t *testing.T) {
 	repo := &mockAvailabilityRepoForEventHandler{}
-	handler := NewEventHandler(repo)
+	handler := NewEventHandler(repo, nil)
 
 	payload := domain.ReservationConfirmedPayload{
 		ReservationCode: "res-123",
@@ -82,7 +82,7 @@ func TestEventHandler_HandleStreamMessage_ReservationConfirmed(t *testing.T) {
 
 func TestEventHandler_HandleStreamMessage_ReservationCancelled(t *testing.T) {
 	repo := &mockAvailabilityRepoForEventHandler{}
-	handler := NewEventHandler(repo)
+	handler := NewEventHandler(repo, nil)
 
 	payload := domain.ReservationCancelledPayload{
 		PropertyID:      "prop-1",
@@ -109,7 +109,7 @@ func TestEventHandler_HandleStreamMessage_ReservationCancelled(t *testing.T) {
 
 func TestEventHandler_HandleStreamMessage_UnknownEvent(t *testing.T) {
 	repo := &mockAvailabilityRepoForEventHandler{}
-	handler := NewEventHandler(repo)
+	handler := NewEventHandler(repo, nil)
 
 	msg := &domain.StreamMessage{
 		ID:        "msg-unknown",
@@ -126,7 +126,7 @@ func TestEventHandler_HandleStreamMessage_UnknownEvent(t *testing.T) {
 
 func TestEventHandler_HandleStreamMessage_InvalidPayload(t *testing.T) {
 	repo := &mockAvailabilityRepoForEventHandler{}
-	handler := NewEventHandler(repo)
+	handler := NewEventHandler(repo, nil)
 
 	msg := &domain.StreamMessage{
 		ID:        "msg-invalid",
@@ -143,7 +143,7 @@ func TestEventHandler_HandleStreamMessage_InvalidPayload(t *testing.T) {
 
 func TestEventHandler_HandleStreamMessage_UpdateInventoryError(t *testing.T) {
 	repo := &mockAvailabilityRepoForEventHandler{updateErr: errors.New("update error")}
-	handler := NewEventHandler(repo)
+	handler := NewEventHandler(repo, nil)
 
 	payload := domain.ReservationCreatedPayload{
 		PropertyID:      "prop-1",
@@ -169,7 +169,7 @@ func TestEventHandler_HandleStreamMessage_UpdateInventoryError(t *testing.T) {
 
 func TestEventHandler_HandleReservationCancelled_UpdateError(t *testing.T) {
 	repo := &mockAvailabilityRepoForEventHandler{updateErr: errors.New("restore error")}
-	handler := NewEventHandler(repo)
+	handler := NewEventHandler(repo, nil)
 
 	payload := domain.ReservationCancelledPayload{
 		PropertyID:      "prop-1",
@@ -196,7 +196,7 @@ func TestEventHandler_HandleReservationCancelled_UpdateError(t *testing.T) {
 
 func TestEventHandler_WithRepo(t *testing.T) {
 	repo := &mockAvailabilityRepoForEventHandler{}
-	handler := NewEventHandler(repo)
+	handler := NewEventHandler(repo, nil)
 	
 	if handler.repo != repo {
 		t.Error("Repo not set correctly")
@@ -205,7 +205,7 @@ func TestEventHandler_WithRepo(t *testing.T) {
 
 func TestEventHandler_HandleStreamMessage_EmptyPayload(t *testing.T) {
 	repo := &mockAvailabilityRepoForEventHandler{}
-	handler := NewEventHandler(repo)
+	handler := NewEventHandler(repo, nil)
 
 	msg := &domain.StreamMessage{
 		ID:        "msg-empty",
@@ -222,7 +222,7 @@ func TestEventHandler_HandleStreamMessage_EmptyPayload(t *testing.T) {
 
 func TestEventHandler_HandleReservationConfirmed_InvalidJSON(t *testing.T) {
 	repo := &mockAvailabilityRepoForEventHandler{}
-	handler := NewEventHandler(repo)
+	handler := NewEventHandler(repo, nil)
 
 	msg := &domain.StreamMessage{
 		ID:        "msg-confirmed-invalid",
@@ -239,7 +239,7 @@ func TestEventHandler_HandleReservationConfirmed_InvalidJSON(t *testing.T) {
 
 func TestEventHandler_HandleReservationCancelled_InvalidJSON(t *testing.T) {
 	repo := &mockAvailabilityRepoForEventHandler{}
-	handler := NewEventHandler(repo)
+	handler := NewEventHandler(repo, nil)
 
 	msg := &domain.StreamMessage{
 		ID:        "msg-cancelled-invalid",

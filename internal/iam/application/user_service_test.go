@@ -71,8 +71,7 @@ func (m *mockUserRepoForUserService) EnsureGuest(ctx context.Context, u *domain.
 
 type mockOrgRepoForUserService struct {
 	addMemberErr    error
-	findByUserIDErr error
-}
+	}
 
 func (m *mockOrgRepoForUserService) Save(ctx context.Context, o *domain.Organization) error {
 	return nil
@@ -104,7 +103,7 @@ func TestUserService_Register_Success(t *testing.T) {
 	orgRepo := &mockOrgRepoForUserService{}
 	svc := newUserServiceForTest(repo, orgRepo)
 
-	id, err := svc.Register(context.Background(), "org-1", "test@test.com", "password123", "admin", "John", "Doe", "123")
+	id, err := svc.Register(context.Background(), "org-1", "test@test.com", "Good.Pass1", "admin", "John", "Doe", "123")
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -118,7 +117,7 @@ func TestUserService_Register_SuperAdmin(t *testing.T) {
 	orgRepo := &mockOrgRepoForUserService{}
 	svc := newUserServiceForTest(repo, orgRepo)
 
-	id, err := svc.Register(context.Background(), "", "super@test.com", "password123", "super_admin", "Super", "Admin", "")
+	id, err := svc.Register(context.Background(), "", "super@test.com", "Good.Pass1", "super_admin", "Super", "Admin", "")
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -132,7 +131,7 @@ func TestUserService_Register_SaveError(t *testing.T) {
 	orgRepo := &mockOrgRepoForUserService{}
 	svc := newUserServiceForTest(repo, orgRepo)
 
-	_, err := svc.Register(context.Background(), "", "test@test.com", "password123", "user", "John", "Doe", "")
+	_, err := svc.Register(context.Background(), "", "test@test.com", "Good.Pass1", "user", "John", "Doe", "")
 	if err == nil {
 		t.Error("Expected error from save")
 	}
@@ -143,12 +142,25 @@ func TestUserService_Register_WithOrg(t *testing.T) {
 	orgRepo := &mockOrgRepoForUserService{}
 	svc := newUserServiceForTest(repo, orgRepo)
 
-	id, err := svc.Register(context.Background(), "org-123", "test@test.com", "password123", "admin", "John", "Doe", "")
+	id, err := svc.Register(context.Background(), "org-123", "test@test.com", "Good.Pass1", "admin", "John", "Doe", "")
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
 	if id == "" {
 		t.Error("Expected non-empty id")
+	}
+}
+
+func TestUserService_Register_RejectsWeakPassword(t *testing.T) {
+	repo := &mockUserRepoForUserService{}
+	orgRepo := &mockOrgRepoForUserService{}
+	svc := newUserServiceForTest(repo, orgRepo)
+
+	for _, p := range []string{"", "short", "password123", "12345678", "alllowercase"} {
+		_, err := svc.Register(context.Background(), "org-123", "test@test.com", p, "user", "John", "Doe", "")
+		if err == nil {
+			t.Errorf("expected ErrWeakPassword for %q, got nil", p)
+		}
 	}
 }
 
@@ -333,7 +345,7 @@ func TestUserService_Register_AddMemberError(t *testing.T) {
 	orgRepo := &mockOrgRepoForUserService{addMemberErr: errors.New("add member error")}
 	svc := newUserServiceForTest(repo, orgRepo)
 
-	_, err := svc.Register(context.Background(), "org-1", "test@test.com", "password", "admin", "John", "Doe", "123")
+	_, err := svc.Register(context.Background(), "org-1", "test@test.com", "Good.Pass1", "admin", "John", "Doe", "123")
 	if err == nil {
 		t.Error("Expected error from AddMember")
 	}
@@ -448,7 +460,7 @@ func TestUserService_Register_SaltError(t *testing.T) {
 	sg := &mockSaltGenerator{generateErr: errors.New("salt error")}
 	svc := newUserServiceWithMocks(repo, orgRepo, hasher, sg)
 
-	_, err := svc.Register(context.Background(), "", "test@test.com", "password", "user", "John", "Doe", "123")
+	_, err := svc.Register(context.Background(), "", "test@test.com", "Good.Pass1", "user", "John", "Doe", "123")
 	if err == nil {
 		t.Error("Expected salt error")
 	}
@@ -461,7 +473,7 @@ func TestUserService_Register_HashError(t *testing.T) {
 	sg := &mockSaltGenerator{generateRes: "salt"}
 	svc := newUserServiceWithMocks(repo, orgRepo, hasher, sg)
 
-	_, err := svc.Register(context.Background(), "", "test@test.com", "password", "user", "John", "Doe", "123")
+	_, err := svc.Register(context.Background(), "", "test@test.com", "Good.Pass1", "user", "John", "Doe", "123")
 	if err == nil {
 		t.Error("Expected hash error")
 	}

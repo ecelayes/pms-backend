@@ -29,7 +29,7 @@ RUN apk --no-cache add ca-certificates tzdata
 WORKDIR /root/
 
 COPY --from=builder /app/pms-backend .
-COPY --from=builder /app/migrations ./migrations
+COPY --from=builder /app/db/migrations ./db/migrations
 COPY --from=builder /app/scripts ./scripts
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup

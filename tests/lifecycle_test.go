@@ -37,7 +37,7 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 		res := s.MakeRequest("POST", "/api/v1/users", map[string]string{
 			"organization_id": s.orgID,
 			"email":           "ceo@global.com",
-			"password":        "pass",
+			"password":        "Good.Pass1",
 			"role":            "owner",
 			"first_name":      "The",
 			"last_name":       "CEO",
@@ -49,7 +49,7 @@ func (s *LifecycleSuite) TestFullLifecycle() {
 	s.Run("3. Login Owner", func() {
 		res := s.MakeRequest("POST", "/api/v1/auth/login", map[string]string{
 			"email":    "ceo@global.com",
-			"password": "pass",
+			"password": "Good.Pass1",
 		}, "")
 		s.Equal(http.StatusOK, res.Code)
 		var data map[string]string

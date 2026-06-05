@@ -2,11 +2,12 @@ package iam
 
 import (
 	"github.com/ecelayes/pms-backend/internal/iam/adapter"
-	"github.com/ecelayes/pms-backend/internal/iam/adapter/http"
+	httpAdapter "github.com/ecelayes/pms-backend/internal/iam/adapter/http"
 	"github.com/ecelayes/pms-backend/internal/iam/adapter/token"
 	"github.com/ecelayes/pms-backend/internal/iam/application"
 	"github.com/ecelayes/pms-backend/pkg/auth"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"time"
 	"github.com/labstack/echo/v4"
 )
 
@@ -44,13 +45,18 @@ func NewModule(db *pgxpool.Pool, group *echo.Group, protected *echo.Group, email
 		TokenGenerator: tokenGenerator,
 	}))
 
-	authH := http.NewAuthHandler(authService)
-	userH := http.NewUserHandler(userService)
-	orgH := http.NewOrganizationHandler(orgService)
+	authH := httpAdapter.NewAuthHandler(authService)
+	userH := httpAdapter.NewUserHandler(userService)
+	orgH := httpAdapter.NewOrganizationHandler(orgService)
 
-	group.POST("/auth/login", authH.Login)
-	group.POST("/auth/forgot-password", authH.ForgotPassword)
-	group.POST("/auth/reset-password", authH.ResetPassword)
+	// SECURITY: Rate limit auth endpoints to mitigate brute force / credential stuffing.
+	// 5 requests/second with burst of 10. Per-IP.
+	authLimiter := httpAdapter.NewIPRateLimiter(5, 10, 10*time.Minute)
+	authGroup := group.Group("/auth", authLimiter.Middleware())
+
+	authGroup.POST("/login", authH.Login)
+	authGroup.POST("/forgot-password", authH.ForgotPassword)
+	authGroup.POST("/reset-password", authH.ResetPassword)
 	protected.POST("/organizations", orgH.Create)
 	protected.GET("/organizations", orgH.GetAll)
 	protected.GET("/organizations/:id", orgH.GetByID)

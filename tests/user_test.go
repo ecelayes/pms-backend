@@ -24,7 +24,7 @@ func (s *UserSuite) TestUserHierarchy() {
 	res := s.MakeRequest("POST", "/api/v1/users", map[string]string{
 		"organization_id": s.orgID,
 		"email":           "manager@corp.com",
-		"password":        "secret123",
+		"password":        "Good.Pass1",
 		"role":            "manager",
 		"first_name":      "Manager",
     "last_name":       "One",
@@ -35,7 +35,7 @@ func (s *UserSuite) TestUserHierarchy() {
 	resFail := s.MakeRequest("POST", "/api/v1/users", map[string]string{
 		"organization_id": s.orgID,
 		"email":           "another_owner@corp.com",
-		"password":        "secret123",
+		"password":        "Good.Pass1",
 		"role":            "owner",
 		"first_name":      "Owner",
     "last_name":       "Two",
@@ -50,7 +50,7 @@ func (s *UserSuite) TestListUsers() {
 	res := s.MakeRequest("POST", "/api/v1/users", map[string]string{
 		"organization_id": s.orgID,
 		"email":           "staff@corp.com",
-		"password":        "secret123",
+		"password":        "Good.Pass1",
 		"role":            "staff",
 		"first_name":      "Staff",
 		"last_name":       "Member",
@@ -71,7 +71,7 @@ func (s *UserSuite) TestUserValidation() {
 	res := s.MakeRequest("POST", "/api/v1/users", map[string]string{
 		"organization_id": s.orgID,
 		"email":           "invalid-email",
-		"password":        "secret123",
+		"password":        "Good.Pass1",
 		"role":            "staff",
 		"first_name":      "Staff", "last_name": "Member", "phone": "123",
 	}, s.ownerToken)
@@ -104,7 +104,7 @@ func (s *UserSuite) TestUserDuplicateEmail() {
 	res := s.MakeRequest("POST", "/api/v1/users", map[string]string{
 		"organization_id": s.orgID,
 		"email":           "duplicate@corp.com",
-		"password":        "pass1",
+		"password":        "Good.Pass1",
 		"role":            "staff",
 		"first_name":      "User", "last_name": "A", "phone": "1",
 	}, s.ownerToken)
@@ -113,7 +113,7 @@ func (s *UserSuite) TestUserDuplicateEmail() {
 	res2 := s.MakeRequest("POST", "/api/v1/users", map[string]string{
 		"organization_id": s.orgID,
 		"email":           "duplicate@corp.com",
-		"password":        "pass2",
+		"password":        "Good.Pass2",
 		"role":            "staff",
 		"first_name":      "User", "last_name": "B", "phone": "2",
 	}, s.ownerToken)

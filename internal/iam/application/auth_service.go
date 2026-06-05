@@ -8,7 +8,10 @@ import (
 )
 
 var (
-	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrInvalidCredentials    = errors.New("invalid credentials")
+	ErrInvalidTokenPurpose   = errors.New("invalid token purpose")
+	ErrInvalidOrExpiredToken = errors.New("invalid or expired token")
+	ErrWeakPassword          = errors.New("password does not meet strength requirements")
 )
 
 type EmailService interface {
@@ -80,7 +83,7 @@ func (s *AuthService) GetUserSalt(ctx context.Context, userID string) (string, e
 		return "", err
 	}
 	if u == nil {
-		return "", errors.New("user not found")
+		return "", ErrUserNotFound
 	}
 	return u.Salt(), nil
 }
@@ -88,7 +91,8 @@ func (s *AuthService) GetUserSalt(ctx context.Context, userID string) (string, e
 func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) error {
 	user, err := s.userRepo.FindByEmail(ctx, email)
 	if err != nil {
-		return nil
+		// SECURITY: silently return nil to avoid leaking user existence via timing/error
+		return nil //nolint:nilerr
 	}
 	if user == nil {
 		return nil
@@ -109,18 +113,21 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, newPassword stri
 		return err
 	}
 	if claims.Purpose != auth.PurposeReset {
-		return errors.New("invalid token purpose")
+		return ErrInvalidTokenPurpose
 	}
 	user, err := s.userRepo.FindByID(ctx, claims.UserID)
 	if err != nil {
 		return err
 	}
 	if user == nil {
-		return errors.New("user not found")
+		return ErrUserNotFound
 	}
 	// SECURITY: Verify signature BEFORE trusting the claims
 	if _, err := s.tokenGenerator.VerifySignature(token, user.Salt()); err != nil {
-		return errors.New("invalid or expired token")
+		return ErrInvalidOrExpiredToken
+	}
+	if _, err := domain.NewPassword(newPassword); err != nil {
+		return ErrWeakPassword
 	}
 	hashed, err := s.passwordHasher.Hash(newPassword)
 	if err != nil {

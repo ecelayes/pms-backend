@@ -12,22 +12,28 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/joho/godotenv"
+	"go.uber.org/zap"
 )
 
 func main() {
 	_ = godotenv.Load()
-
+	appLogger, _ := zap.NewProduction()
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: go run cmd/migrate/main.go [setup|create-db|migrate-up|migrate-down|status]")
-		os.Exit(1)
+		_ = appLogger.Sync()
+		os.Exit(1) //nolint:gocritic
 	}
+
+	defer func() { _ = appLogger.Sync() }()
+
+	defer func() { _ = appLogger.Sync() }() //nolint:gocritic
 
 	cmd := os.Args[1]
 	switch cmd {
 	case "setup":
-		setup()
+		setup(appLogger)
 	case "create-db":
-		createDatabases()
+		createDatabases(appLogger)
 	case "migrate-up":
 		migrateUp()
 	case "migrate-down":
@@ -36,7 +42,8 @@ func main() {
 		migrateStatus()
 	default:
 		fmt.Printf("Unknown command: %s\n", cmd)
-		os.Exit(1)
+		_ = appLogger.Sync()
+		os.Exit(1) //nolint:gocritic
 	}
 }
 
@@ -75,7 +82,7 @@ func ensureMigrate() {
 	}
 }
 
-func createDatabases() {
+func createDatabases(appLogger *zap.Logger) {
 	ctx := context.Background()
 	
 	mainDB := getDBURL("postgres")
@@ -97,7 +104,7 @@ func createDatabases() {
 			if strings.Contains(err.Error(), "already exists") {
 				fmt.Printf("DB %s already exists\n", db)
 			} else {
-				log.Printf("Warning creating %s: %v", db, err)
+				appLogger.Warn("warning creating database", zap.String("db", db), zap.Error(err))
 			}
 		} else {
 			fmt.Printf("Created database: %s\n", db)
@@ -145,9 +152,9 @@ func migrateStatus() {
 	cmd.Run()
 }
 
-func setup() {
+func setup(appLogger *zap.Logger) {
 	fmt.Println("=== Full database setup ===")
-	createDatabases()
+	createDatabases(appLogger)
 	
 	fmt.Println("\n=== Running migrations ===")
 	runMigrate("up")

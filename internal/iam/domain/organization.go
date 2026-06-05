@@ -47,7 +47,4 @@ func (o *Organization) Update(name, code string) {
 }
 
 type OrganizationMember struct {
-	organizationID string
-	userID         string
-	role           string
 }

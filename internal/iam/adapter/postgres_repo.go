@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"github.com/ecelayes/pms-backend/internal/iam/domain"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -39,8 +40,8 @@ func (r *PostgresUserRepository) FindByID(ctx context.Context, id string) (*doma
 	var createdAt time.Time
 	err := r.db.QueryRow(ctx, query, id).Scan(&email, &password, &salt, &role, &fName, &lName, &phone, &createdAt)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
 		}
 		return nil, err
 	}
@@ -55,8 +56,8 @@ func (r *PostgresUserRepository) FindByEmail(ctx context.Context, email string) 
 	var createdAt time.Time
 	err := r.db.QueryRow(ctx, query, email).Scan(&id, &password, &salt, &role, &fName, &lName, &phone, &createdAt)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
 		}
 		return nil, err
 	}
@@ -124,15 +125,15 @@ func (r *PostgresOrganizationRepository) Save(ctx context.Context, o *domain.Org
 }
 func (r *PostgresOrganizationRepository) FindByID(ctx context.Context, id string) (*domain.Organization, error) {
 	if err := uuid.Validate(id); err != nil {
-		return nil, nil
+		return nil, domain.ErrNotFound
 	}
 	query := `SELECT name, code, created_at FROM organizations WHERE id=$1 AND deleted_at IS NULL`
 	var name, code string
 	var createdAt time.Time
 	err := r.db.QueryRow(ctx, query, id).Scan(&name, &code, &createdAt)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
 		}
 		return nil, err
 	}
@@ -152,8 +153,8 @@ func (r *PostgresOrganizationRepository) FindMemberRole(ctx context.Context, org
 	var role string
 	err := r.db.QueryRow(ctx, query, orgID, userID).Scan(&role)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return "", nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", domain.ErrNotFound
 		}
 		return "", err
 	}
@@ -171,8 +172,8 @@ func (r *PostgresOrganizationRepository) FindByUserID(ctx context.Context, userI
 	var createdAt time.Time
 	err := r.db.QueryRow(ctx, query, userID).Scan(&id, &name, &code, &createdAt)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
 		}
 		return nil, err
 	}

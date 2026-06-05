@@ -1,6 +1,7 @@
 package http
 
 import (
+	sharedContext "github.com/ecelayes/pms-backend/internal/shared/context"
 	"github.com/labstack/echo/v4"
 	"github.com/ecelayes/pms-backend/internal/shared/dto"
 	"math"
@@ -64,7 +65,7 @@ func (h *AvailabilityHandler) Get(c echo.Context) error {
 			limit = l
 		}
 	}
-	results, err := h.service.Search(c.Request().Context(), propertyID, start, end, adults, children, rooms)
+	results, err := h.service.Search(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), propertyID, start, end, adults, children, rooms)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}

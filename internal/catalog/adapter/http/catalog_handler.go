@@ -5,6 +5,7 @@ import (
 	"github.com/ecelayes/pms-backend/internal/catalog/application"
 	"github.com/ecelayes/pms-backend/internal/catalog/domain"
 	"github.com/ecelayes/pms-backend/internal/shared/dto"
+	sharedContext "github.com/ecelayes/pms-backend/internal/shared/context"
 	"github.com/labstack/echo/v4"
 	"math"
 	"net/http"
@@ -41,7 +42,7 @@ func (h *CatalogHandler) CreateAmenity(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	id, err := h.service.CreateAmenity(c.Request().Context(), req.Name, req.Description, req.Icon)
+	id, err := h.service.CreateAmenity(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), req.Name, req.Description, req.Icon)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
 			return c.JSON(http.StatusConflict, map[string]string{"error": "amenity already exists"})
@@ -61,7 +62,7 @@ func (h *CatalogHandler) GetAllAmenities(c echo.Context) error {
 	if l, err := strconv.Atoi(c.QueryParam("limit")); err == nil && l > 0 {
 		limit = l
 	}
-	list, totalCount, err := h.service.ListAmenities(c.Request().Context(), page, limit)
+	list, totalCount, err := h.service.ListAmenities(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), page, limit)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -83,7 +84,7 @@ func (h *CatalogHandler) GetAllAmenities(c echo.Context) error {
 }
 func (h *CatalogHandler) GetAmenityByID(c echo.Context) error {
 	id := c.Param("id")
-	amenity, err := h.service.GetAmenity(c.Request().Context(), id)
+	amenity, err := h.service.GetAmenity(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id)
 	if err != nil {
 		if errors.Is(err, application.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "amenity not found"})
@@ -98,7 +99,7 @@ func (h *CatalogHandler) UpdateAmenity(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	err := h.service.UpdateAmenity(c.Request().Context(), id, req.Name, req.Description, req.Icon)
+	err := h.service.UpdateAmenity(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id, req.Name, req.Description, req.Icon)
 	if err != nil {
 		if errors.Is(err, application.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "amenity not found"})
@@ -109,7 +110,7 @@ func (h *CatalogHandler) UpdateAmenity(c echo.Context) error {
 }
 func (h *CatalogHandler) DeleteAmenity(c echo.Context) error {
 	id := c.Param("id")
-	err := h.service.DeleteAmenity(c.Request().Context(), id)
+	err := h.service.DeleteAmenity(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -120,7 +121,7 @@ func (h *CatalogHandler) CreateService(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	id, err := h.service.CreateGuestService(c.Request().Context(), req.Name, req.Description, req.Icon)
+	id, err := h.service.CreateGuestService(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), req.Name, req.Description, req.Icon)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
 			return c.JSON(http.StatusConflict, map[string]string{"error": "service already exists"})
@@ -140,7 +141,7 @@ func (h *CatalogHandler) GetAllServices(c echo.Context) error {
 	if l, err := strconv.Atoi(c.QueryParam("limit")); err == nil && l > 0 {
 		limit = l
 	}
-	list, totalCount, err := h.service.ListGuestServices(c.Request().Context(), page, limit)
+	list, totalCount, err := h.service.ListGuestServices(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), page, limit)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -162,7 +163,7 @@ func (h *CatalogHandler) GetAllServices(c echo.Context) error {
 }
 func (h *CatalogHandler) GetServiceByID(c echo.Context) error {
 	id := c.Param("id")
-	service, err := h.service.GetGuestService(c.Request().Context(), id)
+	service, err := h.service.GetGuestService(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id)
 	if err != nil {
 		if errors.Is(err, application.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "service not found"})
@@ -177,7 +178,7 @@ func (h *CatalogHandler) UpdateService(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	err := h.service.UpdateGuestService(c.Request().Context(), id, req.Name, req.Description, req.Icon)
+	err := h.service.UpdateGuestService(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id, req.Name, req.Description, req.Icon)
 	if err != nil {
 		if errors.Is(err, application.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "service not found"})
@@ -188,7 +189,7 @@ func (h *CatalogHandler) UpdateService(c echo.Context) error {
 }
 func (h *CatalogHandler) DeleteService(c echo.Context) error {
 	id := c.Param("id")
-	err := h.service.DeleteGuestService(c.Request().Context(), id)
+	err := h.service.DeleteGuestService(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}

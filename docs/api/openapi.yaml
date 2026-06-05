@@ -1,0 +1,970 @@
+openapi: 3.0.3
+info:
+  title: PMS Backend API
+  version: 1.0.0
+  description: |
+    Property Management System REST API.
+    All `/api/v1/*` routes except `/api/v1/auth/*` require Bearer token authentication.
+    Admin routes (`/admin/*`) require super-admin role.
+  contact:
+    name: PMS Team
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Users
+  - name: Organizations
+  - name: Properties
+  - name: UnitTypes
+  - name: Units
+  - name: Amenities
+  - name: Services
+  - name: Pricing
+  - name: RatePlans
+  - name: Reservations
+  - name: Availability
+  - name: Admin
+    description: Super-admin only endpoints
+
+paths:
+  /live:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      security: []
+      responses:
+        '200': { description: Service is alive }
+
+  /ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe
+      security: []
+      responses:
+        '200': { description: Service is ready }
+        '503': { description: Service is not ready }
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Legacy health endpoint (alias for /ready)
+      security: []
+      responses:
+        '200': { description: OK }
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      description: |
+        Email/password login. Rate limited to 5 req/s with burst 10 per IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/v1/auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password reset
+      description: Sends a reset email. Always returns 200 to avoid email enumeration.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ForgotPasswordRequest' }
+      responses:
+        '200': { description: Reset email sent (or user does not exist) }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/v1/auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password with token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResetPasswordRequest' }
+      responses:
+        '200': { description: Password updated }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /api/v1/users:
+    post:
+      tags: [Users]
+      summary: Create user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateUserRequest' }
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserCreatedResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    get:
+      tags: [Users]
+      summary: List users
+      parameters:
+        - in: query
+          name: organization_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/users/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Users]
+      summary: Get user by ID
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Users]
+      summary: Update user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateUserRequest' }
+      responses:
+        '200': { description: User updated }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Users]
+      summary: Delete user
+      responses:
+        '204': { description: User deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/organizations:
+    post:
+      tags: [Organizations]
+      summary: Create organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateOrganizationRequest' }
+      responses:
+        '201':
+          description: Organization created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationCreatedResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    get:
+      tags: [Organizations]
+      summary: List organizations
+      responses:
+        '200':
+          description: List of organizations
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Organization' }
+
+  /api/v1/organizations/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Organizations]
+      summary: Get organization by ID
+      responses:
+        '200':
+          description: Organization found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Organization' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Organizations]
+      summary: Update organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateOrganizationRequest' }
+      responses:
+        '200': { description: Organization updated }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Organizations]
+      summary: Delete organization
+      responses:
+        '204': { description: Organization deleted }
+
+  /api/v1/properties:
+    post:
+      tags: [Properties]
+      summary: Create property
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePropertyRequest' }
+      responses:
+        '201': { description: Property created }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    get:
+      tags: [Properties]
+      summary: List properties
+      responses:
+        '200':
+          description: List of properties
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Property' }
+
+  /api/v1/properties/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Properties]
+      summary: Get property
+      responses:
+        '200':
+          description: Property found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Property' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Properties]
+      summary: Update property
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdatePropertyRequest' }
+      responses:
+        '200': { description: Property updated }
+    delete:
+      tags: [Properties]
+      summary: Delete property
+      responses:
+        '204': { description: Property deleted }
+
+  /api/v1/unit-types:
+    post:
+      tags: [UnitTypes]
+      summary: Create unit type
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateUnitTypeRequest' }
+      responses:
+        '201': { description: Unit type created }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    get:
+      tags: [UnitTypes]
+      summary: List unit types
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/UnitType' }
+
+  /api/v1/unit-types/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [UnitTypes]
+      summary: Get unit type
+      responses:
+        '200':
+          description: Found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UnitType' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [UnitTypes]
+      summary: Update unit type
+      responses:
+        '200': { description: Updated }
+    delete:
+      tags: [UnitTypes]
+      summary: Delete unit type
+      responses:
+        '204': { description: Deleted }
+
+  /api/v1/units:
+    post:
+      tags: [Units]
+      summary: Create unit
+      responses:
+        '201': { description: Unit created }
+    get:
+      tags: [Units]
+      summary: List units
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Unit' }
+
+  /api/v1/units/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Units]
+      summary: Get unit
+      responses:
+        '200':
+          description: Found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Unit' }
+    put:
+      tags: [Units]
+      summary: Update unit
+      responses:
+        '200': { description: Updated }
+    delete:
+      tags: [Units]
+      summary: Delete unit
+      responses:
+        '204': { description: Deleted }
+
+  /api/v1/amenities:
+    post:
+      tags: [Amenities]
+      summary: Create amenity
+      responses:
+        '201': { description: Created }
+    get:
+      tags: [Amenities]
+      summary: List amenities
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Amenity' }
+
+  /api/v1/amenities/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Amenities]
+      summary: Get amenity
+      responses:
+        '200': { description: Found }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [Amenities]
+      summary: Update amenity
+      responses:
+        '200': { description: Updated }
+    delete:
+      tags: [Amenities]
+      summary: Delete amenity
+      responses:
+        '204': { description: Deleted }
+
+  /api/v1/services:
+    post:
+      tags: [Services]
+      summary: Create guest service
+      responses:
+        '201': { description: Created }
+    get:
+      tags: [Services]
+      summary: List services
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Service' }
+
+  /api/v1/services/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Services]
+      summary: Get service
+      responses:
+        '200': { description: Found }
+    put:
+      tags: [Services]
+      summary: Update service
+      responses:
+        '200': { description: Updated }
+    delete:
+      tags: [Services]
+      summary: Delete service
+      responses:
+        '204': { description: Deleted }
+
+  /api/v1/pricing/bulk:
+    post:
+      tags: [Pricing]
+      summary: Bulk update pricing
+      responses:
+        '200': { description: Updated }
+
+  /api/v1/pricing/rules:
+    get:
+      tags: [Pricing]
+      summary: List pricing rules
+      responses:
+        '200': { description: List }
+
+  /api/v1/pricing/rules/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [Pricing]
+      summary: Delete pricing rule
+      responses:
+        '204': { description: Deleted }
+
+  /api/v1/rate-plans:
+    post:
+      tags: [RatePlans]
+      summary: Create rate plan
+      responses:
+        '201': { description: Created }
+    get:
+      tags: [RatePlans]
+      summary: List rate plans
+      responses:
+        '200': { description: List }
+
+  /api/v1/rate-plans/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [RatePlans]
+      summary: Get rate plan
+      responses:
+        '200': { description: Found }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [RatePlans]
+      summary: Update rate plan
+      responses:
+        '200': { description: Updated }
+    delete:
+      tags: [RatePlans]
+      summary: Delete rate plan
+      responses:
+        '204': { description: Deleted }
+
+  /api/v1/reservations:
+    post:
+      tags: [Reservations]
+      summary: Create reservation (guest-facing)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateReservationRequest' }
+      responses:
+        '201':
+          description: Reservation created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReservationCreatedResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { description: No availability for the requested dates }
+
+  /api/v1/reservations/{code}:
+    parameters:
+      - in: path
+        name: code
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Reservations]
+      summary: Get reservation by code
+      responses:
+        '200':
+          description: Found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reservation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/reservations/{id}/cancel:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Reservations]
+      summary: Cancel reservation
+      responses:
+        '200': { description: Cancelled }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/reservations/{id}/cancel-preview:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Reservations]
+      summary: Preview cancellation penalty
+      responses:
+        '200':
+          description: Penalty amount
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CancellationPreview' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/reservations/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [Reservations]
+      summary: Delete reservation
+      responses:
+        '204': { description: Deleted }
+
+  /api/v1/availability:
+    get:
+      tags: [Availability]
+      summary: Get availability for a unit type
+      security: []
+      parameters:
+        - in: query
+          name: unit_type_id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: start
+          required: true
+          schema: { type: string, format: date }
+        - in: query
+          name: end
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Availability data
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Availability' }
+
+  /admin/dlq/stats:
+    get:
+      tags: [Admin]
+      summary: Get DLQ statistics
+      responses:
+        '200':
+          description: Stats
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DLQStats' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/dlq/messages:
+    get:
+      tags: [Admin]
+      summary: Get DLQ messages
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, default: 100 }
+      responses:
+        '200': { description: Messages }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/dlq/messages/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [Admin]
+      summary: Delete a DLQ message
+      responses:
+        '204': { description: Deleted }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/dlq/purge:
+    delete:
+      tags: [Admin]
+      summary: Purge all DLQ messages
+      responses:
+        '204': { description: Purged }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: Conflict (e.g., duplicate email)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    TooManyRequests:
+      description: Too many requests (rate limit)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+
+    LoginResponse:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, description: JWT token }
+
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+
+    ResetPasswordRequest:
+      type: object
+      required: [token, new_password]
+      properties:
+        token: { type: string }
+        new_password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 128
+          description: Must contain upper, lower, and digit, and not be a common password.
+
+    CreateUserRequest:
+      type: object
+      required: [email, password, role, first_name, last_name]
+      properties:
+        organization_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        password: { type: string, format: password, minLength: 8, maxLength: 128 }
+        role:
+          type: string
+          enum: [user, manager, admin, owner, super_admin]
+        first_name: { type: string }
+        last_name: { type: string }
+        phone: { type: string }
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        role: { type: string, enum: [user, manager, admin, owner, super_admin] }
+        first_name: { type: string }
+        last_name: { type: string }
+        phone: { type: string }
+
+    UserCreatedResponse:
+      type: object
+      properties:
+        user_id: { type: string, format: uuid }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role: { type: string }
+        first_name: { type: string }
+        last_name: { type: string }
+        phone: { type: string }
+        organization_id: { type: string, format: uuid }
+        is_guest: { type: boolean }
+
+    CreateOrganizationRequest:
+      type: object
+      required: [name, code]
+      properties:
+        name: { type: string }
+        code: { type: string }
+
+    UpdateOrganizationRequest:
+      type: object
+      properties:
+        name: { type: string }
+        code: { type: string }
+
+    OrganizationCreatedResponse:
+      type: object
+      properties:
+        organization_id: { type: string, format: uuid }
+
+    Organization:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+
+    CreatePropertyRequest:
+      type: object
+      required: [organization_id, name, code, type]
+      properties:
+        organization_id: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+        type:
+          type: string
+          enum: [HOTEL, HOSTEL, APARTMENT, RESORT, BNB]
+
+    UpdatePropertyRequest:
+      type: object
+      properties:
+        name: { type: string }
+        code: { type: string }
+        type: { type: string }
+
+    Property:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+        type: { type: string }
+
+    CreateUnitTypeRequest:
+      type: object
+      required: [property_id, name, code, total_quantity, base_price_cents, base_price_currency]
+      properties:
+        property_id: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+        total_quantity: { type: integer, minimum: 1 }
+        base_price_cents: { type: integer, minimum: 0 }
+        base_price_currency: { type: string, minLength: 3, maxLength: 3 }
+
+    UnitType:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        property_id: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+        total_quantity: { type: integer }
+        base_price_cents: { type: integer }
+        base_price_currency: { type: string }
+
+    Unit:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        unit_type_id: { type: string, format: uuid }
+        label: { type: string }
+
+    Amenity:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        icon: { type: string }
+
+    Service:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        price_cents: { type: integer }
+        price_currency: { type: string }
+
+    CreateReservationRequest:
+      type: object
+      required: [unit_type_id, start, end, guest_email, guest_first_name, guest_last_name, adults]
+      properties:
+        unit_type_id: { type: string, format: uuid }
+        rate_plan_id: { type: string, format: uuid }
+        start: { type: string, format: date }
+        end: { type: string, format: date }
+        guest_email: { type: string, format: email }
+        guest_first_name: { type: string }
+        guest_last_name: { type: string }
+        guest_phone: { type: string }
+        adults: { type: integer, minimum: 1 }
+        children: { type: integer, minimum: 0, default: 0 }
+
+    ReservationCreatedResponse:
+      type: object
+      properties:
+        reservation_code: { type: string }
+
+    Reservation:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        status: { type: string, enum: [pending, confirmed, cancelled] }
+        property_id: { type: string, format: uuid }
+        unit_type_id: { type: string, format: uuid }
+        rate_plan_id: { type: string, format: uuid }
+        guest_email: { type: string, format: email }
+        start: { type: string, format: date }
+        end: { type: string, format: date }
+        total_price_cents: { type: integer }
+        total_price_currency: { type: string }
+
+    CancellationPreview:
+      type: object
+      properties:
+        penalty_cents: { type: integer }
+        penalty_currency: { type: string }
+        refund_cents: { type: integer }
+        refund_currency: { type: string }
+
+    Availability:
+      type: object
+      properties:
+        unit_type_id: { type: string, format: uuid }
+        start: { type: string, format: date }
+        end: { type: string, format: date }
+        days:
+          type: array
+          items:
+            type: object
+            properties:
+              date: { type: string, format: date }
+              available: { type: integer, minimum: 0 }
+              total: { type: integer, minimum: 0 }
+
+    DLQStats:
+      type: object
+      properties:
+        total: { type: integer }
+        by_type:
+          type: object
+          additionalProperties: { type: integer }
+
+security:
+  - bearerAuth: []

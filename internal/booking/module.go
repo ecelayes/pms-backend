@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
-	"log"
+	"go.uber.org/zap"
 )
 
 type Module struct {
@@ -29,13 +29,17 @@ func NewModule(
 	userService *iamApp.UserService,
 	availService *availApp.AvailabilityService,
 	redisClient *redis.Client,
+	logger *zap.Logger,
 ) *Module {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	repo := adapter.NewPostgresReservationRepository(db)
 	var publisher *redisAdapter.StreamProducer
 	if redisClient != nil {
-		publisher = redisAdapter.NewStreamProducer(redisClient)
+		publisher = redisAdapter.NewStreamProducer(redisClient, logger)
 		if err := publisher.EnsureGroups(context.Background()); err != nil {
-			log.Printf("[BookingModule] Warning: failed to ensure stream groups: %v", err)
+			logger.Warn("failed to ensure stream groups", zap.Error(err))
 		}
 	}
 	service := application.NewBookingService(
@@ -44,6 +48,7 @@ func NewModule(
 		catalogService,
 		userService,
 		availService,
+		logger,
 		publisher,
 	)
 	handler := http.NewReservationHandler(service)

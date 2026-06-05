@@ -3,12 +3,13 @@ package availability
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"sync"
 	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+
 	"github.com/ecelayes/pms-backend/internal/availability/adapter"
 	"github.com/ecelayes/pms-backend/internal/availability/adapter/http"
 	"github.com/ecelayes/pms-backend/internal/availability/application"
@@ -29,13 +30,17 @@ func NewModule(
 	catalogService *catalogApp.CatalogService,
 	pricingService *pricingApp.PricingService,
 	emailSvc *email.Service,
+	logger *zap.Logger,
 ) *Module {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	redisRepo := adapter.NewRedisAvailabilityRepository(rdb)
 	svc := application.NewAvailabilityService(redisRepo, catalogService, pricingService)
-	eventHandler := application.NewEventHandler(redisRepo)
-	analyticsStore := redisAdapter.NewAnalyticsStore(rdb)
+	eventHandler := application.NewEventHandler(redisRepo, logger)
+	analyticsStore := redisAdapter.NewAnalyticsStore(rdb, logger)
 
-	go startStreamConsumers(rdb, eventHandler, emailSvc, analyticsStore)
+	go startStreamConsumers(rdb, eventHandler, emailSvc, analyticsStore, logger)
 
 	httpHandler := http.NewAvailabilityHandler(svc)
 	group.GET("/availability", httpHandler.Get)
@@ -43,35 +48,35 @@ func NewModule(
 	return &Module{Service: svc}
 }
 
-func startStreamConsumers(client *redis.Client, handler *application.EventHandler, emailSvc *email.Service, analyticsStore *redisAdapter.AnalyticsStore) {
+func startStreamConsumers(client *redis.Client, handler *application.EventHandler, emailSvc *email.Service, analyticsStore *redisAdapter.AnalyticsStore, logger *zap.Logger) {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		startAvailabilityConsumer(client, handler)
+		startAvailabilityConsumer(client, handler, logger)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		startNotificationsConsumer(client, emailSvc)
+		startNotificationsConsumer(client, emailSvc, logger)
 	}()
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		startAnalyticsConsumer(client, analyticsStore)
+		startAnalyticsConsumer(client, analyticsStore, logger)
 	}()
 
 	wg.Wait()
 }
 
-func startAvailabilityConsumer(client *redis.Client, handler *application.EventHandler) {
+func startAvailabilityConsumer(client *redis.Client, handler *application.EventHandler, logger *zap.Logger) {
 	consumerName := "availability-consumer-1"
-	log.Printf("[AvailabilityModule] Starting stream consumer: %s", consumerName)
+	logger.Info("starting stream consumer", zap.String("consumer", consumerName))
 
-	consumer := redisAdapter.NewStreamConsumer(client, "availability-group", consumerName)
+	consumer := redisAdapter.NewStreamConsumer(client, "availability-group", consumerName, logger)
 	ctx := context.Background()
 
 	eventTypes := []string{domain.EventReservationCreated, domain.EventReservationCancelled}
@@ -80,27 +85,27 @@ func startAvailabilityConsumer(client *redis.Client, handler *application.EventH
 	})
 }
 
-func startNotificationsConsumer(client *redis.Client, emailSvc *email.Service) {
+func startNotificationsConsumer(client *redis.Client, emailSvc *email.Service, logger *zap.Logger) {
 	consumerName := "notifications-consumer-1"
-	log.Printf("[AvailabilityModule] Starting stream consumer: %s", consumerName)
+	logger.Info("starting stream consumer", zap.String("consumer", consumerName))
 
-	consumer := redisAdapter.NewStreamConsumer(client, "notifications-group", consumerName)
+	consumer := redisAdapter.NewStreamConsumer(client, "notifications-group", consumerName, logger)
 	ctx := context.Background()
 
 	eventTypes := []string{domain.EventReservationConfirmed, domain.EventReservationCancelled}
 	consumer.Consume(ctx, eventTypes, func(msg *domain.StreamMessage) error {
-		return handleNotificationEvent(msg, emailSvc)
+		return handleNotificationEvent(msg, emailSvc, logger)
 	})
 }
 
-func handleNotificationEvent(msg *domain.StreamMessage, emailSvc *email.Service) error {
+func handleNotificationEvent(msg *domain.StreamMessage, emailSvc *email.Service, logger *zap.Logger) error {
 	switch msg.EventType {
 	case domain.EventReservationConfirmed:
 		var payload domain.ReservationConfirmedPayload
 		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 			return err
 		}
-		log.Printf("[NotificationsConsumer] Sending confirmation email to %s", payload.GuestEmail)
+		logger.Info("sending confirmation email", zap.String("guest_email", payload.GuestEmail))
 		return emailSvc.SendReservationConfirmed(payload.GuestEmail, payload.GuestEmail, payload.ReservationCode, time.Now(), time.Now().AddDate(0, 0, 1))
 
 	case domain.EventReservationCancelled:
@@ -108,7 +113,7 @@ func handleNotificationEvent(msg *domain.StreamMessage, emailSvc *email.Service)
 		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 			return err
 		}
-		log.Printf("[NotificationsConsumer] Sending cancellation email to %s", payload.GuestEmail)
+		logger.Info("sending cancellation email", zap.String("guest_email", payload.GuestEmail))
 		return emailSvc.SendReservationCancelled(payload.GuestEmail, payload.GuestEmail, payload.ReservationCode)
 
 	default:
@@ -116,20 +121,20 @@ func handleNotificationEvent(msg *domain.StreamMessage, emailSvc *email.Service)
 	}
 }
 
-func startAnalyticsConsumer(client *redis.Client, analyticsStore *redisAdapter.AnalyticsStore) {
+func startAnalyticsConsumer(client *redis.Client, analyticsStore *redisAdapter.AnalyticsStore, logger *zap.Logger) {
 	consumerName := "analytics-consumer-1"
-	log.Printf("[AvailabilityModule] Starting stream consumer: %s", consumerName)
+	logger.Info("starting stream consumer", zap.String("consumer", consumerName))
 
-	consumer := redisAdapter.NewStreamConsumer(client, "analytics-group", consumerName)
+	consumer := redisAdapter.NewStreamConsumer(client, "analytics-group", consumerName, logger)
 	ctx := context.Background()
 
 	eventTypes := []string{domain.EventReservationCreated, domain.EventReservationConfirmed, domain.EventReservationCancelled}
 	consumer.Consume(ctx, eventTypes, func(msg *domain.StreamMessage) error {
-		return handleAnalyticsEvent(ctx, msg, analyticsStore)
+		return handleAnalyticsEvent(ctx, msg, analyticsStore, logger)
 	})
 }
 
-func handleAnalyticsEvent(ctx context.Context, msg *domain.StreamMessage, analyticsStore *redisAdapter.AnalyticsStore) error {
+func handleAnalyticsEvent(ctx context.Context, msg *domain.StreamMessage, analyticsStore *redisAdapter.AnalyticsStore, logger *zap.Logger) error {
 	switch msg.EventType {
 	case domain.EventReservationCreated:
 		var payload domain.ReservationCreatedPayload

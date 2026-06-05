@@ -5,6 +5,7 @@ import (
 	"github.com/ecelayes/pms-backend/internal/pricing/application"
 	"github.com/ecelayes/pms-backend/internal/pricing/domain"
 	"github.com/ecelayes/pms-backend/internal/shared/dto"
+	sharedContext "github.com/ecelayes/pms-backend/internal/shared/context"
 	"github.com/labstack/echo/v4"
 	"net/http"
 	"strings"
@@ -47,7 +48,7 @@ func (h *RatePlanHandler) Create(c echo.Context) error {
 		Type:        req.MealPlan.Type,
 	}
 	id, err := h.service.CreateRatePlan(
-		c.Request().Context(),
+		sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)),
 		req.PropertyID, req.Name,
 		mealPlan, req.CancellationPolicy, req.PaymentPolicy,
 	)
@@ -64,11 +65,11 @@ func (h *RatePlanHandler) List(c echo.Context) error {
 	if propertyID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "property_id is required"})
 	}
-	plans, err := h.service.ListRatePlans(c.Request().Context(), propertyID)
+	plans, err := h.service.ListRatePlans(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), propertyID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
-	var dtos []dto.RatePlan
+	dtos := make([]dto.RatePlan, 0, len(plans))
 	for _, p := range plans {
 		dtos = append(dtos, dto.RatePlan{
 			ID:         p.ID(),
@@ -89,7 +90,7 @@ func (h *RatePlanHandler) List(c echo.Context) error {
 }
 func (h *RatePlanHandler) GetByID(c echo.Context) error {
 	id := c.Param("id")
-	plan, err := h.service.GetRatePlan(c.Request().Context(), id)
+	plan, err := h.service.GetRatePlan(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id)
 	if err != nil {
 		if errors.Is(err, application.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "rate plan not found"})
@@ -116,7 +117,7 @@ func (h *RatePlanHandler) Update(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	if err := h.service.UpdateRatePlan(c.Request().Context(), id, req.Name, req.Description, req.Active); err != nil {
+	if err := h.service.UpdateRatePlan(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id, req.Name, req.Description, req.Active); err != nil {
 		if errors.Is(err, application.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "rate plan not found"})
 		}
@@ -126,7 +127,7 @@ func (h *RatePlanHandler) Update(c echo.Context) error {
 }
 func (h *RatePlanHandler) Delete(c echo.Context) error {
 	id := c.Param("id")
-	if err := h.service.DeleteRatePlan(c.Request().Context(), id); err != nil {
+	if err := h.service.DeleteRatePlan(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id); err != nil {
 		if errors.Is(err, application.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "rate plan not found"})
 		}

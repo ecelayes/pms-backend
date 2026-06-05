@@ -5,6 +5,7 @@ import (
 	"github.com/ecelayes/pms-backend/internal/catalog/application"
 	"github.com/ecelayes/pms-backend/internal/catalog/domain"
 	"github.com/ecelayes/pms-backend/internal/shared/dto"
+	sharedContext "github.com/ecelayes/pms-backend/internal/shared/context"
 	"github.com/labstack/echo/v4"
 	"math"
 	"net/http"
@@ -31,7 +32,7 @@ func (h *PropertyHandler) Create(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	id, err := h.service.CreateProperty(c.Request().Context(), req.OrganizationID, req.Name, req.Code, req.Type)
+	id, err := h.service.CreateProperty(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), req.OrganizationID, req.Name, req.Code, req.Type)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
 			return c.JSON(http.StatusConflict, map[string]string{"error": "property with this code already exists"})
@@ -52,7 +53,7 @@ func (h *PropertyHandler) GetAll(c echo.Context) error {
 	if l, err := strconv.Atoi(c.QueryParam("limit")); err == nil && l > 0 {
 		limit = l
 	}
-	properties, totalCount, err := h.service.ListProperties(c.Request().Context(), orgID, page, limit)
+	properties, totalCount, err := h.service.ListProperties(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), orgID, page, limit)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -74,7 +75,7 @@ func (h *PropertyHandler) GetAll(c echo.Context) error {
 }
 func (h *PropertyHandler) GetByID(c echo.Context) error {
 	id := c.Param("id")
-	property, err := h.service.GetProperty(c.Request().Context(), id)
+	property, err := h.service.GetProperty(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id)
 	if err != nil {
 		if errors.Is(err, application.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "property not found"})
@@ -89,7 +90,7 @@ func (h *PropertyHandler) Update(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	if err := h.service.UpdateProperty(c.Request().Context(), id, req.Name, req.Code, req.Type); err != nil {
+	if err := h.service.UpdateProperty(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id, req.Name, req.Code, req.Type); err != nil {
 		if errors.Is(err, application.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "property not found"})
 		}
@@ -99,7 +100,7 @@ func (h *PropertyHandler) Update(c echo.Context) error {
 }
 func (h *PropertyHandler) Delete(c echo.Context) error {
 	id := c.Param("id")
-	if err := h.service.DeleteProperty(c.Request().Context(), id); err != nil {
+	if err := h.service.DeleteProperty(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), id); err != nil {
 		if errors.Is(err, application.ErrNotFound) {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "property not found"})
 		}

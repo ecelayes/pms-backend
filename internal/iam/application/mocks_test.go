@@ -14,8 +14,7 @@ type mockPasswordHasher struct {
 	hashResult   string
 	hashCalls    int
 	verifyResult bool
-	verifyErr    bool
-}
+	}
 
 func (m *mockPasswordHasher) Hash(password string) (string, error) {
 	m.hashCalls++

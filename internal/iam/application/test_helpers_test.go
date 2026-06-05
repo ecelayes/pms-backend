@@ -12,12 +12,6 @@ func newAuthServiceForTest(userRepo domain.UserRepository, orgRepo domain.Organi
 	return NewAuthService(userRepo, orgRepo, emailSvc, hasher, tg, sg)
 }
 
-// newAuthServiceWithMocks creates an AuthService with custom crypto mocks.
-// Use this for tests that need to simulate crypto errors.
-func newAuthServiceWithMocks(userRepo domain.UserRepository, orgRepo domain.OrganizationRepository, emailSvc EmailService, hasher auth.PasswordHasher, tg auth.TokenGenerator, sg auth.RandomSaltGenerator) *AuthService {
-	return NewAuthService(userRepo, orgRepo, emailSvc, hasher, tg, sg)
-}
-
 // newUserServiceForTest creates a UserService with standard crypto mocks.
 func newUserServiceForTest(repo domain.UserRepository, orgRepo domain.OrganizationRepository) *UserService {
 	return newUserServiceWithMocks(repo, orgRepo, &mockPasswordHasher{hashResult: "hashed"}, &mockSaltGenerator{generateRes: "test-salt"})

@@ -2,12 +2,14 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/ecelayes/pms-backend/internal/shared/domain"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 // AnalyticsEvent is the public struct stored in the analytics stream.
@@ -16,12 +18,16 @@ type AnalyticsEvent = domain.AnalyticsEvent
 // AnalyticsStore implements domain.AnalyticsRecorder using Redis.
 type AnalyticsStore struct {
 	client *redis.Client
+	logger *zap.Logger
 }
 
 var _ domain.AnalyticsRecorder = (*AnalyticsStore)(nil)
 
-func NewAnalyticsStore(client *redis.Client) *AnalyticsStore {
-	return &AnalyticsStore{client: client}
+func NewAnalyticsStore(client *redis.Client, logger *zap.Logger) *AnalyticsStore {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+	return &AnalyticsStore{client: client, logger: logger}
 }
 
 func (s *AnalyticsStore) RecordEvent(ctx context.Context, eventType string, payload interface{}) error {
@@ -62,12 +68,19 @@ func (s *AnalyticsStore) RecordEvent(ctx context.Context, eventType string, payl
 
 	dateKey := time.Now().Format("2006-01-02")
 	key := fmt.Sprintf("analytics:%s:%s", eventType, dateKey)
-	return s.client.XAdd(ctx, &redis.XAddArgs{
+	if err := s.client.XAdd(ctx, &redis.XAddArgs{
 		Stream: key,
 		Values: map[string]interface{}{
 			"event": string(data),
 		},
-	}).Err()
+	}).Err(); err != nil {
+		s.logger.Error("failed to record analytics event",
+			zap.String("event_type", eventType),
+			zap.String("key", key),
+			zap.Error(err))
+		return err
+	}
+	return nil
 }
 
 func (s *AnalyticsStore) GetEventCounts(ctx context.Context, days int) (map[string]int64, error) {
@@ -79,7 +92,10 @@ func (s *AnalyticsStore) GetEventCounts(ctx context.Context, days int) (map[stri
 		key := fmt.Sprintf("analytics:reservation.created:%s", date.Format("2006-01-02"))
 
 		count, err := s.client.XLen(ctx, key).Result()
-		if err != nil && err != redis.Nil {
+		if err != nil && !errors.Is(err, redis.Nil) {
+			s.logger.Warn("failed to get event count",
+				zap.String("key", key),
+				zap.Error(err))
 			continue
 		}
 		counts[date.Format("2006-01-02")] = count

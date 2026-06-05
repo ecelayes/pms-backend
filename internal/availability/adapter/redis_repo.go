@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/redis/go-redis/v9"
 	"strconv"
@@ -25,7 +26,7 @@ func (r *RedisAvailabilityRepository) UpdateInventory(ctx context.Context, prope
 func (r *RedisAvailabilityRepository) GetInventory(ctx context.Context, propertyID, unitID string, date time.Time) (int, error) {
 	key := r.getKey(propertyID, unitID, date)
 	val, err := r.client.Get(ctx, key).Result()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return 0, nil
 	}
 	if err != nil {
@@ -41,18 +42,17 @@ func (r *RedisAvailabilityRepository) GetBatchInventory(ctx context.Context, pro
 		cmds[i] = pipeline.Get(ctx, key)
 	}
 	_, err := pipeline.Exec(ctx)
-	if err != nil && err != redis.Nil {
+	if err != nil && !errors.Is(err, redis.Nil) {
 		return nil, fmt.Errorf("failed to execute pipeline: %w", err)
 	}
 	result := make(map[string]int)
 	for i, cmd := range cmds {
 		val, err := cmd.Result()
 		dateStr := dates[i].Format("2006-01-02")
-		if err == redis.Nil {
+		switch {
+		case errors.Is(err, redis.Nil), err != nil:
 			continue
-		} else if err != nil {
-			continue
-		} else {
+		default:
 			count, _ := strconv.Atoi(val)
 			result[dateStr] = count
 		}

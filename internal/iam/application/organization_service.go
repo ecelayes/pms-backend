@@ -30,6 +30,9 @@ func (s *OrganizationService) Create(ctx context.Context, name, code string) (st
 func (s *OrganizationService) GetByID(ctx context.Context, id string) (*domain.Organization, error) {
 	org, err := s.repo.FindByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, ErrOrgNotFound
+		}
 		return nil, err
 	}
 	if org == nil {

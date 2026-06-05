@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"github.com/ecelayes/pms-backend/internal/catalog/domain"
 	"github.com/ecelayes/pms-backend/internal/shared/vo"
 )
@@ -81,6 +82,9 @@ func (s *CatalogService) DeleteProperty(ctx context.Context, id string) error {
 func (s *CatalogService) GetUnitType(ctx context.Context, id string) (string, vo.Money, int, error) {
 	ut, err := s.unitTypeRepo.FindUnitTypeByID(ctx, id)
 	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return "", vo.Money{}, 0, ErrNotFound
+		}
 		return "", vo.Money{}, 0, err
 	}
 	if ut == nil {

@@ -2,9 +2,12 @@ package http
 
 import (
 	"errors"
-	"github.com/ecelayes/pms-backend/internal/iam/application"
-	"github.com/labstack/echo/v4"
 	"net/http"
+
+	"github.com/ecelayes/pms-backend/internal/iam/application"
+	sharedHTTP "github.com/ecelayes/pms-backend/internal/shared/adapter/http"
+	sharedContext "github.com/ecelayes/pms-backend/internal/shared/context"
+	"github.com/labstack/echo/v4"
 )
 
 type AuthHandler struct {
@@ -32,7 +35,10 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	token, err := h.service.Login(c.Request().Context(), req.Email, req.Password)
+	if err := sharedHTTP.ValidateEmail(req.Email); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	token, err := h.service.Login(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, application.ErrInvalidCredentials) {
 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
@@ -46,7 +52,10 @@ func (h *AuthHandler) ForgotPassword(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	if err := h.service.RequestPasswordReset(c.Request().Context(), req.Email); err != nil {
+	if err := sharedHTTP.ValidateEmail(req.Email); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	if err := h.service.RequestPasswordReset(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), req.Email); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "could not process request"})
 	}
 	return c.JSON(http.StatusOK, map[string]string{
@@ -58,7 +67,10 @@ func (h *AuthHandler) ResetPassword(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
-	if err := h.service.ResetPassword(c.Request().Context(), req.Token, req.NewPassword); err != nil {
+	if err := h.service.ResetPassword(sharedContext.WithRequestID(c.Request().Context(), sharedContext.RequestIDFromEcho(c)), req.Token, req.NewPassword); err != nil {
+		if errors.Is(err, application.ErrWeakPassword) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": err.Error()})
 	}
 	return c.JSON(http.StatusOK, map[string]string{"message": "password updated successfully"})
