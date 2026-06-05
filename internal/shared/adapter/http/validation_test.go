@@ -53,3 +53,9 @@ func TestValidateUUID(t *testing.T) {
 		t.Error("empty accepted")
 	}
 }
+
+func TestValidateEmail_RejectsDisplayName(t *testing.T) {
+	if err := ValidateEmail("John Doe <john@example.com>"); err == nil {
+		t.Error("expected display name to be rejected")
+	}
+}

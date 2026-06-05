@@ -272,6 +272,16 @@ func TestCatalogService_GetUnitType_NotFound(t *testing.T) {
 	}
 }
 
+func TestCatalogService_GetUnitType_NotFoundError(t *testing.T) {
+	repo := &mockUnitTypeRepo{unitType: nil, findErr: domain.ErrNotFound}
+	svc := NewCatalogService(repo, nil, nil, nil, nil)
+
+	_, _, _, err := svc.GetUnitType(context.Background(), "ut-1")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("Expected ErrNotFound, got %v", err)
+	}
+}
+
 func TestCatalogService_CreateUnitType_Success(t *testing.T) {
 	repo := &mockUnitTypeRepo{}
 	svc := NewCatalogService(repo, nil, nil, nil, nil)

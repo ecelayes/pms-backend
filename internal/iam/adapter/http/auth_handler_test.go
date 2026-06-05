@@ -86,6 +86,22 @@ func TestAuthHandler_ForgotPassword_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestAuthHandler_ForgotPassword_InvalidEmail(t *testing.T) {
+	e := echo.New()
+	reqBody := `{"email":"not-an-email"}`
+	req := httptest.NewRequest(http.MethodPost, "/auth/forgot-password", strings.NewReader(reqBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	h := &AuthHandler{service: nil}
+	_ = h.ForgotPassword(c)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400, got %d", rec.Code)
+	}
+}
+
 func TestAuthHandler_ResetPassword_InvalidJSON(t *testing.T) {
 	e := echo.New()
 	reqBody := `{invalid json}`
@@ -118,6 +134,22 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "jwt-token") {
 		t.Errorf("Expected token in body, got: %s", rec.Body.String())
+	}
+}
+
+func TestAuthHandler_Login_InvalidEmail(t *testing.T) {
+	e := echo.New()
+	reqBody := `{"email":"not-an-email","password":"password"}`
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", strings.NewReader(reqBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	h := &AuthHandler{service: nil}
+	_ = h.Login(c)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400, got %d", rec.Code)
 	}
 }
 
@@ -198,6 +230,38 @@ func TestAuthHandler_ResetPassword_Success(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", rec.Code)
+	}
+}
+
+func TestAuthHandler_ResetPassword_WeakPassword(t *testing.T) {
+	e := echo.New()
+	reqBody := `{"token":"abc","new_password":"weak"}`
+	req := httptest.NewRequest(http.MethodPost, "/auth/reset-password", strings.NewReader(reqBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	h := &AuthHandler{service: &mockAuthService{resetPasswordErr: application.ErrWeakPassword}}
+	_ = h.ResetPassword(c)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected status 400, got %d", rec.Code)
+	}
+}
+
+func TestAuthHandler_ResetPassword_InvalidToken(t *testing.T) {
+	e := echo.New()
+	reqBody := `{"token":"bad","new_password":"Good.Pass1"}`
+	req := httptest.NewRequest(http.MethodPost, "/auth/reset-password", strings.NewReader(reqBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	h := &AuthHandler{service: &mockAuthService{resetPasswordErr: errors.New("invalid token")}}
+	_ = h.ResetPassword(c)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("Expected status 401, got %d", rec.Code)
 	}
 }
 

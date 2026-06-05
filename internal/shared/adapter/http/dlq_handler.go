@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/ecelayes/pms-backend/internal/shared/adapter/redis"
@@ -8,8 +9,17 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// dlqStorePort is the subset of *redis.DLQStore that the DLQHandler needs.
+// Defined here so unit tests can mock it without depending on redis.
+type dlqStorePort interface {
+	GetStats(ctx context.Context) (*redis.DLQStats, error)
+	GetMessages(ctx context.Context, limit int64) (*redis.DLQStats, error)
+	DeleteMessage(ctx context.Context, id string) (int64, error)
+	Purge(ctx context.Context) (int64, error)
+}
+
 type DLQHandler struct {
-	store *redis.DLQStore
+	store dlqStorePort
 }
 
 func NewDLQHandler(store *redis.DLQStore) *DLQHandler {

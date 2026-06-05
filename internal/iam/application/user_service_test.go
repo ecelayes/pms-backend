@@ -201,6 +201,17 @@ func TestUserService_GetByID_RepoError(t *testing.T) {
 	}
 }
 
+func TestUserService_GetByID_NotFoundError(t *testing.T) {
+	repo := &mockUserRepoForUserService{findByIDErr: domain.ErrNotFound}
+	orgRepo := &mockOrgRepoForUserService{}
+	svc := newUserServiceForTest(repo, orgRepo)
+
+	_, err := svc.GetByID(context.Background(), "user-1")
+	if !errors.Is(err, ErrUserNotFound) {
+		t.Errorf("Expected ErrUserNotFound, got %v", err)
+	}
+}
+
 func TestUserService_GetAll_Success(t *testing.T) {
 	users := []*domain.User{
 		domain.ReconstituteUser("user-1", "test1@test.com", "hash", "salt", "admin", "John", "Doe", "", time.Now()),
@@ -334,7 +345,7 @@ func TestUserService_Register_NewUserError(t *testing.T) {
 	orgRepo := &mockOrgRepoForUserService{}
 	svc := newUserServiceForTest(repo, orgRepo)
 
-	_, err := svc.Register(context.Background(), "", "", "", "", "", "", "")
+	_, err := svc.Register(context.Background(), "org-1", "not-an-email", "Good.Pass1", "user", "John", "Doe", "")
 	if err == nil {
 		t.Error("Expected error from NewUser")
 	}

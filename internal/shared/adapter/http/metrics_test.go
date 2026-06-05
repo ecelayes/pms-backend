@@ -131,3 +131,16 @@ func readHistogram(t *testing.T, labels ...string) (uint64, float64) {
 	}
 	return m.Histogram.GetSampleCount(), m.Histogram.GetSampleSum()
 }
+
+func TestMetrics_UnmatchedRoute(t *testing.T) {
+	e := echo.New()
+	e.Use(Metrics())
+
+	req := httptest.NewRequest(http.MethodGet, "/no-such-route", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+}

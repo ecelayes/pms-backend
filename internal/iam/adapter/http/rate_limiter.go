@@ -33,6 +33,7 @@ type IPRateLimiter struct {
 	r       rate.Limit
 	b       int
 	ttl     time.Duration
+	stop    chan struct{}
 }
 
 func NewIPRateLimiter(perSecond float64, burst int, ttl time.Duration) *IPRateLimiter {
@@ -42,7 +43,9 @@ func NewIPRateLimiter(perSecond float64, burst int, ttl time.Duration) *IPRateLi
 		b:       burst,
 		ttl:     ttl,
 	}
-	go l.gcLoop()
+	stopCh := make(chan struct{})
+	l.stop = stopCh
+	go l.gcLoop(stopCh)
 	return l
 }
 
@@ -58,19 +61,37 @@ func (l *IPRateLimiter) get(ip string) *rate.Limiter {
 	return bucket.limiter
 }
 
-func (l *IPRateLimiter) gcLoop() {
+func (l *IPRateLimiter) gcOnce() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := time.Now()
+	for ip, b := range l.buckets {
+		if now.Sub(b.lastSeen) > l.ttl {
+			delete(l.buckets, ip)
+		}
+	}
+}
+
+func (l *IPRateLimiter) gcLoop(stop <-chan struct{}) {
 	t := time.NewTicker(l.ttl)
 	defer t.Stop()
-	for range t.C {
-		now := time.Now()
-		l.mu.Lock()
-		for ip, b := range l.buckets {
-			if now.Sub(b.lastSeen) > l.ttl {
-				delete(l.buckets, ip)
-			}
+	for {
+		select {
+		case <-stop:
+			return
+		case <-t.C:
+			l.gcOnce()
 		}
-		l.mu.Unlock()
 	}
+}
+
+// stripPort removes a trailing :port from an IP literal if present.
+// RealIP usually strips the port, but we keep this as a defensive fallback.
+func stripPort(ip string) string {
+	if idx := strings.LastIndex(ip, ":"); idx != -1 {
+		return ip[:idx]
+	}
+	return ip
 }
 
 func (l *IPRateLimiter) Middleware() echo.MiddlewareFunc {
@@ -80,9 +101,7 @@ func (l *IPRateLimiter) Middleware() echo.MiddlewareFunc {
 			if ip == "" {
 				ip = c.Request().RemoteAddr
 			}
-			if idx := strings.LastIndex(ip, ":"); idx != -1 {
-				ip = ip[:idx]
-			}
+			ip = stripPort(ip)
 			if !l.get(ip).Allow() {
 				return c.JSON(http.StatusTooManyRequests, map[string]string{
 					"error": "too many requests",

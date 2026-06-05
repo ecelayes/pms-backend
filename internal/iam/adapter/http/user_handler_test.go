@@ -116,7 +116,7 @@ func TestUserHandler_Create_Success(t *testing.T) {
 	}
 }
 
-func TestUserHandler_Create_Duplicate(t *testing.T) {
+func TestUserHandler_Create_DuplicateUser(t *testing.T) {
 	e := echo.New()
 	reqBody := `{"email":"test@test.com","password":"pass123","role":"manager","organization_id":"o1"}`
 	req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(reqBody))
@@ -454,5 +454,54 @@ func TestUserHandler_NewUserHandler(t *testing.T) {
 	}
 	if h.service == nil {
 		t.Fatal("service is nil")
+	}
+}
+
+
+func TestUserHandler_Create_InvalidEmail(t *testing.T) {
+	e := echo.New()
+	body := `{"email":"not-an-email","password":"Good.Pass1","role":"user","first_name":"John","last_name":"Doe"}`
+	req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("role", "admin")
+
+	h := &UserHandler{service: nil}
+	_ = h.Create(c)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", rec.Code)
+	}
+}
+
+func TestUserHandler_Create_WeakPassword(t *testing.T) {
+	e := echo.New()
+	body := `{"email":"test@test.com","password":"weak","role":"user","first_name":"John","last_name":"Doe"}`
+	req := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("role", "admin")
+
+	h := &UserHandler{service: &mockUserService{registerErr: application.ErrWeakPassword}}
+	_ = h.Create(c)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", rec.Code)
+	}
+}
+
+func TestUserHandler_GetAll_InvalidUUID(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/users?organization_id=not-a-uuid", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	h := &UserHandler{service: nil}
+	_ = h.GetAll(c)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", rec.Code)
 	}
 }

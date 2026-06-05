@@ -63,3 +63,26 @@ func TestRequestIDFromEcho_NilContext(t *testing.T) {
 	rid := RequestIDFromEcho(nil)
 	assert.Equal(t, "", rid)
 }
+
+func TestRequestIDFromContext_LiteralNil(t *testing.T) {
+	var nilCtx context.Context
+	got, err := RequestIDFromContext(nilCtx)
+	assert.Equal(t, "", got)
+	assert.True(t, errors.Is(err, ErrNoRequestID))
+}
+
+func TestRequestIDFromEcho_FallbackToHeader(t *testing.T) {
+	e := echo.New()
+	e.GET("/test", func(c echo.Context) error {
+		c.Response().Header().Set("X-Request-ID", "header-id-456")
+		rid := RequestIDFromEcho(c)
+		return c.String(http.StatusOK, rid)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "header-id-456", rec.Body.String())
+}

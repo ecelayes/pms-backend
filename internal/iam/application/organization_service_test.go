@@ -190,3 +190,13 @@ func TestOrganizationService_GetByID_RepoError(t *testing.T) {
 		t.Error("Expected error from repo")
 	}
 }
+
+func TestOrganizationService_GetByID_NotFoundError(t *testing.T) {
+	repo := &mockOrgRepoForOrg{findByIDErr: domain.ErrNotFound}
+	svc := NewOrganizationService(repo)
+
+	_, err := svc.GetByID(context.Background(), "org-1")
+	if !errors.Is(err, ErrOrgNotFound) {
+		t.Errorf("Expected ErrOrgNotFound, got %v", err)
+	}
+}
