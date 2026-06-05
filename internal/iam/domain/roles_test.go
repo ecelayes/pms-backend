@@ -1,89 +1,60 @@
 package domain
 
 import (
-	"net/http"
-	"net/http/httptest"
 	"testing"
-
-	"github.com/labstack/echo/v4"
 )
 
-func TestRequireSuperAdminAuthorized(t *testing.T) {
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.Set("role", string(RoleSuperAdmin))
-	
-	handler := RequireSuperAdmin(func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
-	})
-	
-	err := handler(c)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
+func TestUserRole_NewUserRole(t *testing.T) {
+	tests := []struct {
+		input   string
+		want    UserRole
+		wantErr bool
+	}{
+		{string(RoleUser), RoleUser, false},
+		{string(RoleSuperAdmin), RoleSuperAdmin, false},
+		{"admin", "", true},
+		{"owner", "", true},
+		{"", "", true},
+		{"USER", "", true}, // case-sensitive
 	}
-	if rec.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", rec.Code)
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := NewUserRole(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NewUserRole(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Errorf("NewUserRole(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
 	}
 }
 
-func TestRequireSuperAdminForbidden(t *testing.T) {
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.Set("role", string(RoleUser))
-	
-	handler := RequireSuperAdmin(func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
-	})
-	
-	err := handler(c)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
+func TestUserRole_String(t *testing.T) {
+	if RoleUser.String() != "user" {
+		t.Errorf("RoleUser.String() = %q, want user", RoleUser.String())
 	}
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403, got %d", rec.Code)
+	if RoleSuperAdmin.String() != "super_admin" {
+		t.Errorf("RoleSuperAdmin.String() = %q, want super_admin", RoleSuperAdmin.String())
 	}
 }
 
-func TestRequireSuperAdminNoRole(t *testing.T) {
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	// role not set
-	
-	handler := RequireSuperAdmin(func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
-	})
-	
-	err := handler(c)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
+func TestUserRole_IsSuperAdmin(t *testing.T) {
+	if !RoleSuperAdmin.IsSuperAdmin() {
+		t.Error("RoleSuperAdmin.IsSuperAdmin() = false, want true")
 	}
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("Expected status 401, got %d", rec.Code)
+	if RoleUser.IsSuperAdmin() {
+		t.Error("RoleUser.IsSuperAdmin() = true, want false")
 	}
 }
 
-func TestRequireSuperAdminInvalidRoleType(t *testing.T) {
-	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.Set("role", 12345) // int instead of string
-	
-	handler := RequireSuperAdmin(func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
-	})
-	
-	err := handler(c)
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
+func TestUserRole_IsUser(t *testing.T) {
+	if !RoleUser.IsUser() {
+		t.Error("RoleUser.IsUser() = false, want true")
 	}
-	if rec.Code != http.StatusUnauthorized {
-		t.Errorf("Expected status 401, got %d", rec.Code)
+	if RoleSuperAdmin.IsUser() {
+		t.Error("RoleSuperAdmin.IsUser() = true, want false")
 	}
 }

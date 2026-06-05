@@ -1,19 +1,26 @@
 package domain
 
-import (
-	"github.com/labstack/echo/v4"
-	"net/http"
+import "errors"
+
+var ErrInvalidRole = errors.New("invalid role")
+
+// UserRole is a value object representing the role of a user in the system.
+type UserRole string
+
+const (
+	RoleUser       UserRole = "user"
+	RoleSuperAdmin UserRole = "super_admin"
 )
 
-func RequireSuperAdmin(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		role, ok := c.Get("role").(string)
-		if !ok {
-			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-		}
-		if role != string(RoleSuperAdmin) {
-			return c.JSON(http.StatusForbidden, map[string]string{"error": "requires super_admin privileges"})
-		}
-		return next(c)
+func NewUserRole(s string) (UserRole, error) {
+	switch UserRole(s) {
+	case RoleUser, RoleSuperAdmin:
+		return UserRole(s), nil
+	default:
+		return "", ErrInvalidRole
 	}
 }
+
+func (r UserRole) String() string       { return string(r) }
+func (r UserRole) IsSuperAdmin() bool   { return r == RoleSuperAdmin }
+func (r UserRole) IsUser() bool         { return r == RoleUser }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 	"github.com/ecelayes/pms-backend/internal/shared/dto"
@@ -111,7 +112,8 @@ func (s *RatePlanSuite) TestRatePlanLifecycle() {
 		"rate_plan_id":     planID,
 		"guest_email":      "check@integrity.com",
 		"guest_first_name": "Integrity", "guest_last_name": "Check",
-		"start":            "2026-06-05", "end": "2026-06-07",
+		"start":            time.Now().AddDate(0, 0, 15).Format("2006-01-02"),
+		"end":              time.Now().AddDate(0, 0, 17).Format("2006-01-02"),
 		"adults":           2, "children": 0,
 	}, "")
 	s.Require().Equal(http.StatusCreated, resRes.Code)

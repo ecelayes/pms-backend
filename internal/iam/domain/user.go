@@ -12,13 +12,6 @@ var (
 	emailRegex      = regexp.MustCompile(`^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,4}$`)
 )
 
-type UserRole string
-
-const (
-	RoleUser       UserRole = "user"
-	RoleSuperAdmin UserRole = "super_admin"
-)
-
 type User struct {
 	id        string
 	email     string
