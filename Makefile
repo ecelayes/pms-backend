@@ -47,3 +47,21 @@ install-migrate:
 .PHONY: db-clean
 db-clean:
 	docker compose down -v
+
+# Run integration tests against the real Redis + Postgres
+# Requires the env vars: TEST_DATABASE_URL, TEST_REDIS_ADDR
+.PHONY: test-integration
+test-integration:
+	@if [ ! -f .env ]; then echo "Missing .env"; exit 1; fi
+	@set -a && . ./.env && set +a; \
+		export TEST_DATABASE_URL=postgres://$$DB_USER:$$DB_PASSWORD@$$DB_HOST:$$DB_PORT/$$DB_TEST_NAME?sslmode=disable; \
+		export TEST_REDIS_ADDR=$${TEST_REDIS_ADDR:-localhost:6379}; \
+		go test -count=1 -timeout=120s ./tests/...
+
+# Run unit tests + integration tests in sequence
+.PHONY: test-all
+test-all: test
+	@set -a && . ./.env && set +a; \
+		export TEST_DATABASE_URL=postgres://$$DB_USER:$$DB_PASSWORD@$$DB_HOST:$$DB_PORT/$$DB_TEST_NAME?sslmode=disable; \
+		export TEST_REDIS_ADDR=$${TEST_REDIS_ADDR:-localhost:6379}; \
+		go test -count=1 -timeout=120s ./tests/...

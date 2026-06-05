@@ -1,9 +1,8 @@
 package http
 
 import (
-	"github.com/ecelayes/pms-backend/internal/availability/application"
-	"github.com/ecelayes/pms-backend/internal/shared/dto"
 	"github.com/labstack/echo/v4"
+	"github.com/ecelayes/pms-backend/internal/shared/dto"
 	"math"
 	"net/http"
 	"strconv"
@@ -11,10 +10,10 @@ import (
 )
 
 type AvailabilityHandler struct {
-	service *application.AvailabilityService
+	service AvailabilityService
 }
 
-func NewAvailabilityHandler(service *application.AvailabilityService) *AvailabilityHandler {
+func NewAvailabilityHandler(service AvailabilityService) *AvailabilityHandler {
 	return &AvailabilityHandler{service: service}
 }
 func (h *AvailabilityHandler) Get(c echo.Context) error {

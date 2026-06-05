@@ -8,10 +8,10 @@ import (
 )
 
 type AuthHandler struct {
-	service *application.AuthService
+	service AuthService
 }
 
-func NewAuthHandler(service *application.AuthService) *AuthHandler {
+func NewAuthHandler(service AuthService) *AuthHandler {
 	return &AuthHandler{service: service}
 }
 
@@ -63,3 +63,6 @@ func (h *AuthHandler) ResetPassword(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, map[string]string{"message": "password updated successfully"})
 }
+
+// Verify interface compliance
+var _ AuthService = (*application.AuthService)(nil)

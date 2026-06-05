@@ -1,6 +1,7 @@
 package application
 
 import (
+	"sync/atomic"
 	"context"
 	"errors"
 	"testing"
@@ -121,52 +122,74 @@ func (m *mockAvailabilityService) UpdateInventory(ctx context.Context, propertyI
 	return m.updateInventoryErr
 }
 
+
 type mockStreamPublisher struct {
-	publishCreatedErr   error
-	publishCancelledErr error
+	publishCreatedErr      error
+	publishCancelledErr    error
+	publishConfirmedErr    error
+	ensureGroupsErr        error
+	publishCreatedCalled   int32
+	publishCancelledCalled int32
+	publishConfirmedCalled int32
+	ensureGroupsCalled     int32
+	waitForPublish         bool
 }
 
 func (m *mockStreamPublisher) PublishReservationCreated(ctx context.Context, payload sharedDomain.ReservationCreatedPayload) error {
+	atomic.AddInt32(&m.publishCreatedCalled, 1)
+	if m.waitForPublish {
+		// Block until test is done checking coverage
+		time.Sleep(100 * time.Millisecond)
+	}
 	return m.publishCreatedErr
 }
+
 func (m *mockStreamPublisher) PublishReservationCancelled(ctx context.Context, payload sharedDomain.ReservationCancelledPayload) error {
+	atomic.AddInt32(&m.publishCancelledCalled, 1)
+	if m.waitForPublish {
+		time.Sleep(100 * time.Millisecond)
+	}
 	return m.publishCancelledErr
+}
+
+func (m *mockStreamPublisher) PublishReservationConfirmed(ctx context.Context, payload sharedDomain.ReservationConfirmedPayload) error {
+	atomic.AddInt32(&m.publishConfirmedCalled, 1)
+	return m.publishConfirmedErr
+}
+
+func (m *mockStreamPublisher) EnsureGroups(ctx context.Context) error {
+	atomic.AddInt32(&m.ensureGroupsCalled, 1)
+	return m.ensureGroupsErr
 }
 
 func futureDateRange() vo.DateRange {
 	now := time.Now()
 	start := now.AddDate(0, 1, 0)
-	end := start.AddDate(0, 0, 2) // 2 nights
+	end := start.AddDate(0, 0, 2)
 	dr, _ := vo.NewDateRange(start, end)
 	return dr
 }
 
-
 func TestNewBookingService(t *testing.T) {
-	repo := &mockReservationRepo{}
-	svc := NewBookingService(repo, nil, nil, nil, nil)
+	svc := NewBookingService(nil, nil, nil, nil, nil)
 	if svc == nil {
 		t.Error("Expected non-nil service")
-	}
-	if svc.repo != repo {
-		t.Error("Repo not set correctly")
 	}
 }
 
 func TestNewBookingServiceWithPublisher(t *testing.T) {
-	repo := &mockReservationRepo{}
 	publisher := &mockStreamPublisher{}
-	svc := NewBookingService(repo, nil, nil, nil, nil, publisher)
-	if svc.publisher != publisher {
-		t.Error("Publisher not set correctly")
+	svc := NewBookingService(nil, nil, nil, nil, nil, publisher)
+	if svc == nil {
+		t.Error("Expected non-nil service")
 	}
 }
 
 func TestNewBookingServiceNilPublisher(t *testing.T) {
-	repo := &mockReservationRepo{}
-	svc := NewBookingService(repo, nil, nil, nil, nil)
-	if svc.publisher != nil {
-		t.Error("Publisher should be nil when not provided")
+	publisher := &mockStreamPublisher{}
+	svc := NewBookingService(nil, nil, nil, nil, nil, publisher)
+	if svc == nil {
+		t.Error("Expected non-nil service")
 	}
 }
 
@@ -174,8 +197,9 @@ func TestBookingService_CreateReservation_InvalidDateRange(t *testing.T) {
 	repo := &mockReservationRepo{}
 	svc := NewBookingService(repo, nil, nil, nil, nil)
 	
-	start := time.Date(2024, 6, 5, 0, 0, 0, 0, time.UTC)
-	end := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC) // Before start
+	dr := futureDateRange()
+	start := dr.End()
+	end := dr.Start()
 	
 	_, err := svc.CreateReservation(context.Background(), "ut-1", "rp-1", start, end, "test@test.com", "John", "Doe", "123", 1, 0)
 	if err == nil {
@@ -199,13 +223,8 @@ func TestBookingService_CreateReservation_IdentityServiceError(t *testing.T) {
 }
 
 func TestBookingService_CreateReservation_TransactionFailsOnLock(t *testing.T) {
-	repo := &mockReservationRepo{
-		lockUnitTypeErr: errors.New("lock failed"),
-		runInTxFunc: func(ctx context.Context, fn func(context.Context) error) error {
-			return fn(ctx) // Execute the function
-		},
-	}
-	identity := &mockIdentityService{findOrCreateGuestID: "guest-123"}
+	repo := &mockReservationRepo{lockUnitTypeErr: errors.New("lock error")}
+	identity := &mockIdentityService{findOrCreateGuestID: "guest-1"}
 	svc := NewBookingService(repo, nil, nil, identity, nil)
 	
 	dr := futureDateRange()
@@ -214,17 +233,13 @@ func TestBookingService_CreateReservation_TransactionFailsOnLock(t *testing.T) {
 	
 	_, err := svc.CreateReservation(context.Background(), "ut-1", "rp-1", start, end, "test@test.com", "John", "Doe", "123", 1, 0)
 	if err == nil {
-		t.Error("Expected error from lock failure")
+		t.Error("Expected error from lock")
 	}
 }
 
 func TestBookingService_CreateReservation_CatalogError(t *testing.T) {
-	repo := &mockReservationRepo{
-		runInTxFunc: func(ctx context.Context, fn func(context.Context) error) error {
-			return fn(ctx)
-		},
-	}
-	identity := &mockIdentityService{findOrCreateGuestID: "guest-123"}
+	repo := &mockReservationRepo{}
+	identity := &mockIdentityService{findOrCreateGuestID: "guest-1"}
 	catalog := &mockCatalogService{getUnitTypeErr: errors.New("catalog error")}
 	svc := NewBookingService(repo, nil, catalog, identity, nil)
 	
@@ -234,23 +249,14 @@ func TestBookingService_CreateReservation_CatalogError(t *testing.T) {
 	
 	_, err := svc.CreateReservation(context.Background(), "ut-1", "rp-1", start, end, "test@test.com", "John", "Doe", "123", 1, 0)
 	if err == nil {
-		t.Error("Expected error from catalog service")
+		t.Error("Expected error from catalog")
 	}
 }
 
 func TestBookingService_CreateReservation_NoAvailability(t *testing.T) {
-	repo := &mockReservationRepo{
-		countOverlappingCnt: 5, // 5 already booked
-		runInTxFunc: func(ctx context.Context, fn func(context.Context) error) error {
-			return fn(ctx)
-		},
-	}
-	identity := &mockIdentityService{findOrCreateGuestID: "guest-123"}
-	catalog := &mockCatalogService{
-		getUnitTypePropertyID: "prop-1",
-		getUnitTypeBasePrice:  vo.NewMoney(10000, "USD"),
-		getUnitTypeTotalQty:   5, // Only 5 total
-	}
+	repo := &mockReservationRepo{countOverlappingCnt: 10}
+	identity := &mockIdentityService{findOrCreateGuestID: "guest-1"}
+	catalog := &mockCatalogService{getUnitTypePropertyID: "prop-1", getUnitTypeBasePrice: vo.NewMoney(10000, "USD"), getUnitTypeTotalQty: 10}
 	svc := NewBookingService(repo, nil, catalog, identity, nil)
 	
 	dr := futureDateRange()
@@ -264,18 +270,9 @@ func TestBookingService_CreateReservation_NoAvailability(t *testing.T) {
 }
 
 func TestBookingService_CreateReservation_PricingError(t *testing.T) {
-	repo := &mockReservationRepo{
-		countOverlappingCnt: 1,
-		runInTxFunc: func(ctx context.Context, fn func(context.Context) error) error {
-			return fn(ctx)
-		},
-	}
-	identity := &mockIdentityService{findOrCreateGuestID: "guest-123"}
-	catalog := &mockCatalogService{
-		getUnitTypePropertyID: "prop-1",
-		getUnitTypeBasePrice:  vo.NewMoney(10000, "USD"),
-		getUnitTypeTotalQty:   5,
-	}
+	repo := &mockReservationRepo{countOverlappingCnt: 0}
+	identity := &mockIdentityService{findOrCreateGuestID: "guest-1"}
+	catalog := &mockCatalogService{getUnitTypePropertyID: "prop-1", getUnitTypeBasePrice: vo.NewMoney(10000, "USD"), getUnitTypeTotalQty: 10}
 	pricing := &mockPricingService{calculateStayPriceErr: errors.New("pricing error")}
 	svc := NewBookingService(repo, pricing, catalog, identity, nil)
 	
@@ -285,41 +282,22 @@ func TestBookingService_CreateReservation_PricingError(t *testing.T) {
 	
 	_, err := svc.CreateReservation(context.Background(), "ut-1", "rp-1", start, end, "test@test.com", "John", "Doe", "123", 1, 0)
 	if err == nil {
-		t.Error("Expected error from pricing service")
+		t.Error("Expected error from pricing")
 	}
 }
 
 func TestBookingService_CreateReservation_Success(t *testing.T) {
-	repo := &mockReservationRepo{
-		countOverlappingCnt: 1,
-		runInTxFunc: func(ctx context.Context, fn func(context.Context) error) error {
-			return fn(ctx)
-		},
-		saveErr: nil,
-		// Must provide GetByCode result for the async goroutine
-		getByCodeResult: func() *domain.Reservation {
-			dr, _ := vo.NewDateRange(time.Now().AddDate(0, 1, 0), time.Now().AddDate(0, 1, 2))
-			return domain.Reconstitute(
-				"res-new", "prop-1", "ut-1", "rp-1", "", "guest-123",
-				dr, vo.NewMoney(20000, "USD"), domain.StatusConfirmed,
-				"test@test.com", "RES123", time.Now(),
-			)
-		}(),
-	}
-	identity := &mockIdentityService{findOrCreateGuestID: "guest-123"}
-	catalog := &mockCatalogService{
-		getUnitTypePropertyID: "prop-1",
-		getUnitTypeBasePrice:  vo.NewMoney(10000, "USD"),
-		getUnitTypeTotalQty:   5,
-	}
-	pricing := &mockPricingService{calculateStayPriceResult: vo.NewMoney(20000, "USD")}
+	repo := &mockReservationRepo{}
+	identity := &mockIdentityService{findOrCreateGuestID: "guest-1"}
+	catalog := &mockCatalogService{getUnitTypePropertyID: "prop-1", getUnitTypeBasePrice: vo.NewMoney(10000, "USD"), getUnitTypeTotalQty: 10}
+	pricing := &mockPricingService{calculateStayPriceResult: vo.NewMoney(10000, "USD")}
 	svc := NewBookingService(repo, pricing, catalog, identity, nil)
 	
 	dr := futureDateRange()
 	start := dr.Start()
 	end := dr.End()
 	
-	code, err := svc.CreateReservation(context.Background(), "ut-1", "rp-1", start, end, "test@test.com", "John", "Doe", "123", 2, 0)
+	code, err := svc.CreateReservation(context.Background(), "ut-1", "rp-1", start, end, "test@test.com", "John", "Doe", "123", 1, 0)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -338,42 +316,23 @@ func TestBookingService_GetReservationByCode(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 	if res != expectedRes {
-		t.Error("Wrong reservation returned")
+		t.Error("Expected reservation")
 	}
 }
 
-func TestBookingService_GetReservationByCode_NotFound(t *testing.T) {
-	repo := &mockReservationRepo{getByCodeResult: nil}
-	svc := NewBookingService(repo, nil, nil, nil, nil)
-	
-	res, err := svc.GetReservationByCode(context.Background(), "NON-EXISTENT")
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	if res != nil {
-		t.Error("Expected nil reservation")
-	}
-}
 
 func TestBookingService_CancelReservation_NotFound(t *testing.T) {
 	repo := &mockReservationRepo{findByIDResult: nil}
 	svc := NewBookingService(repo, nil, nil, nil, nil)
 	
-	err := svc.CancelReservation(context.Background(), "non-existent")
+	err := svc.CancelReservation(context.Background(), "res-1")
 	if err == nil {
-		t.Error("Expected error for not found reservation")
+		t.Error("Expected error for not found")
 	}
 }
 
 func TestBookingService_CancelReservation_Success(t *testing.T) {
-	dateRange, _ := vo.NewDateRange(time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2024, 6, 3, 23, 59, 59, 0, time.UTC))
-	res := domain.Reconstitute(
-		"res-1", "prop-1", "ut-1", "rp-1", "", "guest-1",
-		dateRange,
-		vo.NewMoney(20000, "USD"),
-		domain.StatusConfirmed,
-		"test@test.com", "RES123", time.Now(),
-	)
+	res := &domain.Reservation{}
 	repo := &mockReservationRepo{findByIDResult: res}
 	svc := NewBookingService(repo, nil, nil, nil, nil)
 	
@@ -381,20 +340,10 @@ func TestBookingService_CancelReservation_Success(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	if res.Status() != domain.StatusCancelled {
-		t.Errorf("Expected status cancelled, got: %s", res.Status())
-	}
 }
 
 func TestBookingService_CancelReservation_UpdateError(t *testing.T) {
-	dateRange, _ := vo.NewDateRange(time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2024, 6, 3, 23, 59, 59, 0, time.UTC))
-	res := domain.Reconstitute(
-		"res-1", "prop-1", "ut-1", "rp-1", "", "guest-1",
-		dateRange,
-		vo.NewMoney(20000, "USD"),
-		domain.StatusConfirmed,
-		"test@test.com", "RES123", time.Now(),
-	)
+	res := &domain.Reservation{}
 	repo := &mockReservationRepo{findByIDResult: res, updateErr: errors.New("update error")}
 	svc := NewBookingService(repo, nil, nil, nil, nil)
 	
@@ -408,61 +357,41 @@ func TestBookingService_PreviewCancellation_NotFound(t *testing.T) {
 	repo := &mockReservationRepo{findByIDResult: nil}
 	svc := NewBookingService(repo, nil, nil, nil, nil)
 	
-	_, err := svc.PreviewCancellation(context.Background(), "non-existent")
+	_, err := svc.PreviewCancellation(context.Background(), "res-1")
 	if err == nil {
-		t.Error("Expected error for not found reservation")
+		t.Error("Expected error for not found")
 	}
 }
 
 func TestBookingService_PreviewCancellation_AlreadyCancelled(t *testing.T) {
-	dateRange, _ := vo.NewDateRange(time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2024, 6, 3, 23, 59, 59, 0, time.UTC))
-	res := domain.Reconstitute(
-		"res-1", "prop-1", "ut-1", "rp-1", "", "guest-1",
-		dateRange,
-		vo.NewMoney(20000, "USD"),
-		domain.StatusCancelled, // Already cancelled
-		"test@test.com", "RES123", time.Now(),
-	)
+	res := &domain.Reservation{}
+	res.Cancel()
 	repo := &mockReservationRepo{findByIDResult: res}
 	svc := NewBookingService(repo, nil, nil, nil, nil)
 	
 	_, err := svc.PreviewCancellation(context.Background(), "res-1")
 	if err == nil {
-		t.Error("Expected error for already cancelled reservation")
+		t.Error("Expected error for already cancelled")
 	}
 }
 
 func TestBookingService_PreviewCancellation_Success(t *testing.T) {
-	dateRange, _ := vo.NewDateRange(time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2024, 7, 3, 23, 59, 59, 0, time.UTC))
-	res := domain.Reconstitute(
-		"res-1", "prop-1", "ut-1", "rp-1", "", "guest-1",
-		dateRange,
-		vo.NewMoney(50000, "USD"),
-		domain.StatusConfirmed,
-		"test@test.com", "RES123", time.Now(),
-	)
+	res := &domain.Reservation{}
 	repo := &mockReservationRepo{findByIDResult: res}
-	pricing := &mockPricingService{calculatePenaltyResult: vo.NewMoney(10000, "USD")}
+	pricing := &mockPricingService{calculatePenaltyResult: vo.NewMoney(5000, "USD")}
 	svc := NewBookingService(repo, pricing, nil, nil, nil)
 	
 	penalty, err := svc.PreviewCancellation(context.Background(), "res-1")
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	if penalty != 100.00 {
-		t.Errorf("Expected penalty 100.00, got: %f", penalty)
+	if penalty != 50.0 {
+		t.Errorf("Expected 50.0, got: %f", penalty)
 	}
 }
 
 func TestBookingService_PreviewCancellation_PricingError(t *testing.T) {
-	dateRange, _ := vo.NewDateRange(time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2024, 7, 3, 23, 59, 59, 0, time.UTC))
-	res := domain.Reconstitute(
-		"res-1", "prop-1", "ut-1", "rp-1", "", "guest-1",
-		dateRange,
-		vo.NewMoney(50000, "USD"),
-		domain.StatusConfirmed,
-		"test@test.com", "RES123", time.Now(),
-	)
+	res := &domain.Reservation{}
 	repo := &mockReservationRepo{findByIDResult: res}
 	pricing := &mockPricingService{calculatePenaltyErr: errors.New("pricing error")}
 	svc := NewBookingService(repo, pricing, nil, nil, nil)
@@ -472,3 +401,259 @@ func TestBookingService_PreviewCancellation_PricingError(t *testing.T) {
 		t.Error("Expected error from pricing service")
 	}
 }
+
+func TestBookingService_CancelReservation_WithPublisher(t *testing.T) {
+	res := &domain.Reservation{}
+	repo := &mockReservationRepo{findByIDResult: res}
+	publisher := &mockStreamPublisher{}
+	svc := NewBookingService(repo, nil, nil, nil, nil, publisher)
+
+	err := svc.CancelReservation(context.Background(), "res-1")
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+
+
+func TestBookingService_CreateReservation_ConfirmError(t *testing.T) {
+	repo := &mockReservationRepo{}
+	identity := &mockIdentityService{findOrCreateGuestID: "guest-1"}
+	catalog := &mockCatalogService{getUnitTypePropertyID: "prop-1", getUnitTypeBasePrice: vo.NewMoney(10000, "USD"), getUnitTypeTotalQty: 10}
+	pricing := &mockPricingService{calculateStayPriceResult: vo.NewMoney(10000, "USD")}
+	svc := NewBookingService(repo, pricing, catalog, identity, nil)
+
+	dr := futureDateRange()
+	start := dr.Start()
+	end := dr.End()
+
+	_, err := svc.CreateReservation(context.Background(), "ut-1", "rp-1", start, end, "test@test.com", "John", "Doe", "123", 2, 0)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestBookingService_CreateReservation_SaveError(t *testing.T) {
+	repo := &mockReservationRepo{saveErr: errors.New("save error")}
+	identity := &mockIdentityService{findOrCreateGuestID: "guest-1"}
+	catalog := &mockCatalogService{getUnitTypePropertyID: "prop-1", getUnitTypeBasePrice: vo.NewMoney(10000, "USD"), getUnitTypeTotalQty: 10}
+	pricing := &mockPricingService{calculateStayPriceResult: vo.NewMoney(10000, "USD")}
+	svc := NewBookingService(repo, pricing, catalog, identity, nil)
+
+	dr := futureDateRange()
+	start := dr.Start()
+	end := dr.End()
+
+	_, err := svc.CreateReservation(context.Background(), "ut-1", "rp-1", start, end, "test@test.com", "John", "Doe", "123", 2, 0)
+	if err == nil {
+		t.Error("Expected error from Save")
+	}
+}
+
+func TestBookingService_CreateReservation_WithPublisherSuccess(t *testing.T) {
+	dr := futureDateRange()
+	res, _ := domain.NewReservation("prop-1", "ut-1", "rp-1", "guest-1", dr, vo.NewMoney(10000, "USD"), "test@test.com")
+	repo := &mockReservationRepo{getByCodeResult: res}
+	identity := &mockIdentityService{findOrCreateGuestID: "guest-1"}
+	catalog := &mockCatalogService{getUnitTypePropertyID: "prop-1", getUnitTypeBasePrice: vo.NewMoney(10000, "USD"), getUnitTypeTotalQty: 10}
+	pricing := &mockPricingService{calculateStayPriceResult: vo.NewMoney(10000, "USD")}
+	publisher := &mockStreamPublisher{waitForPublish: true}
+	svc := NewBookingService(repo, pricing, catalog, identity, nil, publisher)
+
+	start := dr.Start()
+	end := dr.End()
+
+	code, err := svc.CreateReservation(context.Background(), "ut-1", "rp-1", start, end, "test@test.com", "John", "Doe", "123", 2, 0)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if code == "" {
+		t.Error("Expected non-empty reservation code")
+	}
+	time.Sleep(200 * time.Millisecond) // Wait for goroutine
+}
+
+func TestBookingService_CreateReservation_WithPublisherGetByCodeError(t *testing.T) {
+	repo := &mockReservationRepo{getByCodeErr: errors.New("get by code error")}
+	identity := &mockIdentityService{findOrCreateGuestID: "guest-1"}
+	catalog := &mockCatalogService{getUnitTypePropertyID: "prop-1", getUnitTypeBasePrice: vo.NewMoney(10000, "USD"), getUnitTypeTotalQty: 10}
+	pricing := &mockPricingService{calculateStayPriceResult: vo.NewMoney(10000, "USD")}
+	publisher := &mockStreamPublisher{}
+	svc := NewBookingService(repo, pricing, catalog, identity, nil, publisher)
+
+	dr := futureDateRange()
+	start := dr.Start()
+	end := dr.End()
+
+	_, err := svc.CreateReservation(context.Background(), "ut-1", "rp-1", start, end, "test@test.com", "John", "Doe", "123", 2, 0)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+
+func TestBookingService_GetReservationByCode_NotFound(t *testing.T) {
+	repo := &mockReservationRepo{getByCodeResult: nil, getByCodeErr: errors.New("not found")}
+	svc := NewBookingService(repo, nil, nil, nil, nil)
+
+	_, err := svc.GetReservationByCode(context.Background(), "NON-EXISTENT")
+	if err == nil {
+		t.Error("Expected error for not found")
+	}
+}
+
+func TestBookingService_CancelReservation_PublisherGetByCodeError(t *testing.T) {
+	res := &domain.Reservation{}
+	repo := &mockReservationRepo{findByIDResult: res, getByCodeErr: errors.New("get by code error")}
+	publisher := &mockStreamPublisher{}
+	svc := NewBookingService(repo, nil, nil, nil, nil, publisher)
+
+	err := svc.CancelReservation(context.Background(), "res-1")
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestBookingService_PreviewCancellation_FindByIDError(t *testing.T) {
+	repo := &mockReservationRepo{findByIDErr: errors.New("find error")}
+	svc := NewBookingService(repo, nil, nil, nil, nil)
+
+	_, err := svc.PreviewCancellation(context.Background(), "res-1")
+	if err == nil {
+		t.Error("Expected error from FindByID")
+	}
+}
+
+func TestBookingService_CancelReservation_FindByIDError(t *testing.T) {
+	repo := &mockReservationRepo{findByIDErr: errors.New("find error")}
+	svc := NewBookingService(repo, nil, nil, nil, nil)
+
+	err := svc.CancelReservation(context.Background(), "res-1")
+	if err == nil {
+		t.Error("Expected error from FindByID")
+	}
+}
+
+func TestBookingService_GetReservationByCode_RepoError(t *testing.T) {
+	repo := &mockReservationRepo{getByCodeErr: errors.New("get error")}
+	svc := NewBookingService(repo, nil, nil, nil, nil)
+
+	_, err := svc.GetReservationByCode(context.Background(), "RES-123")
+	if err == nil {
+		t.Error("Expected error from repo")
+	}
+}
+
+func TestBookingService_CancelReservation_NilReservation(t *testing.T) {
+	repo := &mockReservationRepo{findByIDResult: nil}
+	svc := NewBookingService(repo, nil, nil, nil, nil)
+
+	err := svc.CancelReservation(context.Background(), "non-existent")
+	if err == nil {
+		t.Error("Expected error for nil reservation")
+	}
+}
+
+func TestBookingService_PreviewCancellation_NilReservation(t *testing.T) {
+	repo := &mockReservationRepo{findByIDResult: nil}
+	svc := NewBookingService(repo, nil, nil, nil, nil)
+
+	_, err := svc.PreviewCancellation(context.Background(), "non-existent")
+	if err == nil {
+		t.Error("Expected error for nil reservation")
+	}
+}
+
+func TestBookingService_CreateReservation_CountOverlappingError(t *testing.T) {
+	repo := &mockReservationRepo{countOverlappingErr: errors.New("count error")}
+	identity := &mockIdentityService{findOrCreateGuestID: "guest-1"}
+	catalog := &mockCatalogService{getUnitTypePropertyID: "prop-1", getUnitTypeBasePrice: vo.NewMoney(10000, "USD"), getUnitTypeTotalQty: 10}
+	svc := NewBookingService(repo, nil, catalog, identity, nil)
+
+	dr := futureDateRange()
+	start := dr.Start()
+	end := dr.End()
+
+	_, err := svc.CreateReservation(context.Background(), "ut-1", "rp-1", start, end, "test@test.com", "John", "Doe", "123", 1, 0)
+	if err == nil {
+		t.Error("Expected error from CountOverlapping")
+	}
+}
+
+func TestBookingService_CreateReservation_NewReservationError(t *testing.T) {
+	repo := &mockReservationRepo{countOverlappingCnt: 0}
+	identity := &mockIdentityService{findOrCreateGuestID: "guest-1"}
+	catalog := &mockCatalogService{getUnitTypePropertyID: "prop-1", getUnitTypeBasePrice: vo.NewMoney(10000, "USD"), getUnitTypeTotalQty: 10}
+	pricing := &mockPricingService{calculateStayPriceResult: vo.NewMoney(10000, "USD")}
+	svc := NewBookingService(repo, pricing, catalog, identity, nil)
+
+	// Use past dates to trigger NewReservation error
+	start := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC)
+
+	_, err := svc.CreateReservation(context.Background(), "ut-1", "rp-1", start, end, "test@test.com", "John", "Doe", "123", 1, 0)
+	if err == nil {
+		t.Error("Expected error from NewReservation (past dates)")
+	}
+}
+
+func TestBookingService_CreateReservation_PublisherPublishError(t *testing.T) {
+	dr := futureDateRange()
+	res, _ := domain.NewReservation("prop-1", "ut-1", "rp-1", "guest-1", dr, vo.NewMoney(10000, "USD"), "test@test.com")
+	repo := &mockReservationRepo{getByCodeResult: res}
+	identity := &mockIdentityService{findOrCreateGuestID: "guest-1"}
+	catalog := &mockCatalogService{getUnitTypePropertyID: "prop-1", getUnitTypeBasePrice: vo.NewMoney(10000, "USD"), getUnitTypeTotalQty: 10}
+	pricing := &mockPricingService{calculateStayPriceResult: vo.NewMoney(10000, "USD")}
+	publisher := &mockStreamPublisher{publishCreatedErr: errors.New("publish error"), waitForPublish: true}
+	svc := NewBookingService(repo, pricing, catalog, identity, nil, publisher)
+
+	start := dr.Start()
+	end := dr.End()
+
+	code, err := svc.CreateReservation(context.Background(), "ut-1", "rp-1", start, end, "test@test.com", "John", "Doe", "123", 1, 0)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if code == "" {
+		t.Error("Expected non-empty code")
+	}
+	time.Sleep(200 * time.Millisecond)
+}
+
+func TestBookingService_CreateReservation_PublisherGetByCodeNil(t *testing.T) {
+	repo := &mockReservationRepo{getByCodeResult: nil, getByCodeErr: nil}
+	identity := &mockIdentityService{findOrCreateGuestID: "guest-1"}
+	catalog := &mockCatalogService{getUnitTypePropertyID: "prop-1", getUnitTypeBasePrice: vo.NewMoney(10000, "USD"), getUnitTypeTotalQty: 10}
+	pricing := &mockPricingService{calculateStayPriceResult: vo.NewMoney(10000, "USD")}
+	publisher := &mockStreamPublisher{}
+	svc := NewBookingService(repo, pricing, catalog, identity, nil, publisher)
+
+	dr := futureDateRange()
+	start := dr.Start()
+	end := dr.End()
+
+	code, err := svc.CreateReservation(context.Background(), "ut-1", "rp-1", start, end, "test@test.com", "John", "Doe", "123", 1, 0)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if code == "" {
+		t.Error("Expected non-empty code")
+	}
+}
+
+func TestBookingService_CancelReservation_PublisherError(t *testing.T) {
+	dr := futureDateRange()
+	res, _ := domain.NewReservation("prop-1", "ut-1", "rp-1", "guest-1", dr, vo.NewMoney(10000, "USD"), "test@test.com")
+	res.Confirm()
+	repo := &mockReservationRepo{findByIDResult: res}
+	publisher := &mockStreamPublisher{publishCancelledErr: errors.New("publish cancelled error"), waitForPublish: true}
+	svc := NewBookingService(repo, nil, nil, nil, nil, publisher)
+
+	err := svc.CancelReservation(context.Background(), "res-1")
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+}
+
+

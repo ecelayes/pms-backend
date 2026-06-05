@@ -13,10 +13,10 @@ import (
 )
 
 type UnitHandler struct {
-	service *application.CatalogService
+	service UnitService
 }
 
-func NewUnitHandler(service *application.CatalogService) *UnitHandler {
+func NewUnitHandler(service UnitService) *UnitHandler {
 	return &UnitHandler{service: service}
 }
 func (h *UnitHandler) Create(c echo.Context) error {

@@ -13,10 +13,10 @@ import (
 )
 
 type PricingHandler struct {
-	service *application.PricingService
+	service PricingService
 }
 
-func NewPricingHandler(service *application.PricingService) *PricingHandler {
+func NewPricingHandler(service PricingService) *PricingHandler {
 	return &PricingHandler{service: service}
 }
 

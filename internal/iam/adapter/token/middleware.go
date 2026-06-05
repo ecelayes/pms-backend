@@ -12,7 +12,20 @@ type SaltProvider interface {
 	GetUserSalt(ctx context.Context, userID string) (string, error)
 }
 
-func Auth(provider SaltProvider) echo.MiddlewareFunc {
+// AuthConfig bundles the dependencies for the Auth middleware.
+//
+// SECURITY: tokenGenerator is the only crypto component used here.
+// The production wiring passes a JWTTokenGenerator (with alg confusion protection).
+type AuthConfig struct {
+	SaltProvider   SaltProvider
+	TokenGenerator auth.TokenGenerator
+}
+
+// Auth returns an Echo middleware that validates JWT tokens.
+//
+// SECURITY: The token generator is injected, so the actual signing algorithm
+// is determined at startup time and cannot be changed at runtime.
+func Auth(cfg AuthConfig) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			authHeader := c.Request().Header.Get("Authorization")
@@ -24,18 +37,19 @@ func Auth(provider SaltProvider) echo.MiddlewareFunc {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid header format"})
 			}
 			tokenString := parts[1]
-			claims, err := auth.ParseTokenClaimsUnsafe(tokenString)
+
+			claims, err := cfg.TokenGenerator.ParseUnsafe(tokenString)
 			if err != nil {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "malformed token"})
 			}
 			if claims.Purpose != auth.PurposeAuth {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token purpose"})
 			}
-			userSalt, err := provider.GetUserSalt(c.Request().Context(), claims.UserID)
+			userSalt, err := cfg.SaltProvider.GetUserSalt(c.Request().Context(), claims.UserID)
 			if err != nil {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "user not found or inactive"})
 			}
-			validClaims, err := auth.ValidateSignature(tokenString, userSalt)
+			validClaims, err := cfg.TokenGenerator.VerifySignature(tokenString, userSalt)
 			if err != nil {
 				return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid token signature"})
 			}

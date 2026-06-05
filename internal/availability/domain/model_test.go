@@ -48,3 +48,28 @@ func TestSearchCriteria(t *testing.T) {
 		t.Errorf("Expected EndDate %v, got %v", endDate, criteria.EndDate)
 	}
 }
+
+func TestAvailabilityReadModel_ZeroCount(t *testing.T) {
+	model := AvailabilityReadModel{
+		PropertyID: "prop-1",
+		UnitID:     "unit-1",
+		Date:       time.Now(),
+		Count:      0,
+	}
+	
+	if model.Count != 0 {
+		t.Errorf("Expected Count 0, got %d", model.Count)
+	}
+}
+
+func TestSearchCriteria_EmptyProperty(t *testing.T) {
+	criteria := SearchCriteria{
+		PropertyID: "",
+		StartDate:  time.Now(),
+		EndDate:    time.Now().AddDate(0, 0, 1),
+	}
+	
+	if criteria.PropertyID != "" {
+		t.Errorf("Expected empty PropertyID, got '%s'", criteria.PropertyID)
+	}
+}

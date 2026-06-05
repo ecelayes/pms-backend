@@ -28,6 +28,10 @@ type IdentityService interface {
 type AvailabilityService interface {
 	UpdateInventory(ctx context.Context, propertyID, unitTypeID string, start, end time.Time, delta int) error
 }
+// StreamPublisher is the contract for publishing reservation events.
+// We keep this as a focused interface (only 2 methods) because the booking
+// service only needs these. The full Redis adapter satisfies it via Go's
+// structural typing (no explicit "implements" needed).
 type StreamPublisher interface {
 	PublishReservationCreated(ctx context.Context, payload sharedDomain.ReservationCreatedPayload) error
 	PublishReservationCancelled(ctx context.Context, payload sharedDomain.ReservationCancelledPayload) error
@@ -121,7 +125,7 @@ func (s *BookingService) CreateReservation(
 	go func() {
 		if s.publisher != nil {
 			res, err := s.repo.GetByCode(ctx, reservationCode)
-			if err != nil {
+			if err != nil || res == nil {
 				log.Printf("[BookingService] Failed to get reservation for event: %v", err)
 				return
 			}

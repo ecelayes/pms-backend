@@ -12,23 +12,38 @@ var (
 	ErrUserNotFound = errors.New("user not found")
 )
 
+// UserService manages user registration and retrieval.
+//
+// SECURITY: Password hashing and salt generation are delegated to interfaces.
+// The production wiring uses BcryptPasswordHasher and CryptoRandomSaltGenerator
+// (industry-standard, slow, salted). Tests can inject mocks to simulate failures.
 type UserService struct {
-	repo    domain.UserRepository
-	orgRepo domain.OrganizationRepository
+	repo           domain.UserRepository
+	orgRepo        domain.OrganizationRepository
+	passwordHasher auth.PasswordHasher
+	saltGenerator  auth.RandomSaltGenerator
 }
 
-func NewUserService(repo domain.UserRepository, orgRepo domain.OrganizationRepository) *UserService {
+func NewUserService(
+	repo domain.UserRepository,
+	orgRepo domain.OrganizationRepository,
+	passwordHasher auth.PasswordHasher,
+	saltGenerator auth.RandomSaltGenerator,
+) *UserService {
 	return &UserService{
-		repo:    repo,
-		orgRepo: orgRepo,
+		repo:           repo,
+		orgRepo:        orgRepo,
+		passwordHasher: passwordHasher,
+		saltGenerator:  saltGenerator,
 	}
 }
+
 func (s *UserService) Register(ctx context.Context, orgID, email, password, role, firstName, lastName, phone string) (string, error) {
-	salt, err := auth.GenerateRandomSalt()
+	salt, err := s.saltGenerator.Generate()
 	if err != nil {
 		return "", err
 	}
-	hashed, err := auth.HashPassword(password)
+	hashed, err := s.passwordHasher.Hash(password)
 	if err != nil {
 		return "", err
 	}
@@ -55,6 +70,7 @@ func (s *UserService) Register(ctx context.Context, orgID, email, password, role
 	}
 	return u.ID(), nil
 }
+
 func (s *UserService) FindOrCreateGuest(ctx context.Context, email, firstName, lastName, phone string) (string, error) {
 	u, err := s.repo.FindByEmail(ctx, email)
 	if err != nil {
@@ -66,7 +82,7 @@ func (s *UserService) FindOrCreateGuest(ctx context.Context, email, firstName, l
 		}
 		return u.ID(), nil
 	}
-	randomPwd, _ := auth.GenerateRandomSalt()
+	randomPwd, _ := s.saltGenerator.Generate()
 	id, err := s.Register(ctx, "", email, randomPwd, "user", firstName, lastName, phone)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "unique") {
@@ -92,6 +108,7 @@ func (s *UserService) FindOrCreateGuest(ctx context.Context, email, firstName, l
 	}
 	return id, nil
 }
+
 func (s *UserService) GetByID(ctx context.Context, id string) (*domain.User, error) {
 	u, err := s.repo.FindByID(ctx, id)
 	if err != nil {
@@ -102,9 +119,11 @@ func (s *UserService) GetByID(ctx context.Context, id string) (*domain.User, err
 	}
 	return u, nil
 }
+
 func (s *UserService) GetAll(ctx context.Context, orgID string) ([]*domain.User, error) {
 	return s.repo.FindAllByOrganization(ctx, orgID)
 }
+
 func (s *UserService) Update(ctx context.Context, id string, role, firstName, lastName, phone string) error {
 	u, err := s.GetByID(ctx, id)
 	if err != nil {
@@ -113,6 +132,7 @@ func (s *UserService) Update(ctx context.Context, id string, role, firstName, la
 	u.Update(domain.UserRole(role), firstName, lastName, phone)
 	return s.repo.Save(ctx, u)
 }
+
 func (s *UserService) Delete(ctx context.Context, id string) error {
 	_, err := s.GetByID(ctx, id)
 	if err != nil {

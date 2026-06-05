@@ -10,10 +10,10 @@ import (
 )
 
 type UserHandler struct {
-	service *application.UserService
+	service UserService
 }
 
-func NewUserHandler(service *application.UserService) *UserHandler {
+func NewUserHandler(service UserService) *UserHandler {
 	return &UserHandler{service: service}
 }
 
@@ -139,3 +139,6 @@ func (h *UserHandler) Delete(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, map[string]string{"message": "user deleted"})
 }
+
+// Verify interface compliance
+var _ UserService = (*application.UserService)(nil)

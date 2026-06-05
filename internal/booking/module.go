@@ -9,7 +9,7 @@ import (
 	catalogApp "github.com/ecelayes/pms-backend/internal/catalog/application"
 	iamApp "github.com/ecelayes/pms-backend/internal/iam/application"
 	pricingApp "github.com/ecelayes/pms-backend/internal/pricing/application"
-	sharedDomain "github.com/ecelayes/pms-backend/internal/shared/domain"
+	redisAdapter "github.com/ecelayes/pms-backend/internal/shared/adapter/redis"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
@@ -31,13 +31,12 @@ func NewModule(
 	redisClient *redis.Client,
 ) *Module {
 	repo := adapter.NewPostgresReservationRepository(db)
-	var publisher sharedDomain.StreamPublisher
+	var publisher *redisAdapter.StreamProducer
 	if redisClient != nil {
-		streamProducer := sharedDomain.NewRedisStreamProducer(redisClient)
-		if err := streamProducer.EnsureGroups(context.Background()); err != nil {
+		publisher = redisAdapter.NewStreamProducer(redisClient)
+		if err := publisher.EnsureGroups(context.Background()); err != nil {
 			log.Printf("[BookingModule] Warning: failed to ensure stream groups: %v", err)
 		}
-		publisher = streamProducer
 	}
 	service := application.NewBookingService(
 		repo,

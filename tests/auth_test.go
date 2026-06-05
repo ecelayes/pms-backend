@@ -22,8 +22,8 @@ func (s *AuthSuite) TestLogin() {
 	
 	email := "login@test.com"
 	pass := "pass123"
-	hash, _ := auth.HashPassword(pass)
-	salt, _ := auth.GenerateRandomSalt()
+	hash, _ := auth.NewBcryptPasswordHasher().Hash(pass)
+	salt, _ := auth.NewCryptoRandomSaltGenerator().Generate()
 
 	s.db.Exec(ctx, `INSERT INTO organizations (id, name, code, created_at, updated_at) VALUES ($1, 'Auth Corp', 'AUTH', NOW(), NOW())`, orgID.String())
 	s.db.Exec(ctx, `INSERT INTO users (id, email, password, salt, role, first_name, last_name, phone, created_at, updated_at) VALUES ($1, $2, $3, $4, 'user', 'Test', 'User', '12345', NOW(), NOW())`, userID.String(), email, hash, salt)
@@ -48,8 +48,8 @@ func (s *AuthSuite) TestPasswordResetFlow() {
 	userID, _ := uuid.NewV7()
 	email := "reset@test.com"
 	pass := "oldpass"
-	hash, _ := auth.HashPassword(pass)
-	salt, _ := auth.GenerateRandomSalt()
+	hash, _ := auth.NewBcryptPasswordHasher().Hash(pass)
+	salt, _ := auth.NewCryptoRandomSaltGenerator().Generate()
 
 	_, err := s.db.Exec(ctx, `INSERT INTO users (id, email, password, salt, role, first_name, last_name, phone, created_at, updated_at) VALUES ($1, $2, $3, $4, 'user', 'Test', 'User', '12345', NOW(), NOW())`, userID.String(), email, hash, salt)
 	s.Require().NoError(err)
@@ -68,7 +68,7 @@ func (s *AuthSuite) TestPasswordResetFlow() {
 	err = s.db.QueryRow(ctx, "SELECT salt FROM users WHERE id=$1", userID).Scan(&currentSalt)
 	s.Require().NoError(err)
 
-	resetToken, err := auth.GenerateResetToken(userID.String(), currentSalt)
+	resetToken, err := auth.NewJWTTokenGenerator().GenerateResetToken(userID.String(), currentSalt)
 	s.Require().NoError(err)
 
 	newPass := "newpass123"

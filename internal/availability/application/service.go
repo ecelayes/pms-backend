@@ -3,22 +3,20 @@ package application
 import (
 	"context"
 	"github.com/ecelayes/pms-backend/internal/availability/domain"
-	catalogApp "github.com/ecelayes/pms-backend/internal/catalog/application"
-	pricingApp "github.com/ecelayes/pms-backend/internal/pricing/application"
 	"github.com/ecelayes/pms-backend/internal/shared/dto"
 	"time"
 )
 
 type AvailabilityService struct {
 	repo    domain.AvailabilityRepository
-	catalog *catalogApp.CatalogService
-	pricing *pricingApp.PricingService
+	catalog CatalogPort
+	pricing PricingPort
 }
 
 func NewAvailabilityService(
 	repo domain.AvailabilityRepository,
-	catalog *catalogApp.CatalogService,
-	pricing *pricingApp.PricingService,
+	catalog CatalogPort,
+	pricing PricingPort,
 ) *AvailabilityService {
 	return &AvailabilityService{
 		repo:    repo,
@@ -26,6 +24,7 @@ func NewAvailabilityService(
 		pricing: pricing,
 	}
 }
+
 func (s *AvailabilityService) Search(ctx context.Context, propertyID string, start, end time.Time, adults, children, rooms int) ([]dto.AvailabilityResult, error) {
 	unitTypes, _, err := s.catalog.ListUnitTypes(ctx, propertyID, 1, 1000)
 	if err != nil {
@@ -86,6 +85,7 @@ func (s *AvailabilityService) Search(ctx context.Context, propertyID string, sta
 	}
 	return results, nil
 }
+
 func (s *AvailabilityService) UpdateInventory(ctx context.Context, propertyID, unitTypeID string, start, end time.Time, delta int) error {
 	var dates []time.Time
 	for d := start; d.Before(end); d = d.AddDate(0, 0, 1) {

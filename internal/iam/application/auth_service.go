@@ -14,19 +14,42 @@ var (
 type EmailService interface {
 	SendPasswordReset(toEmail, userName, token string) error
 }
+
+// AuthService orchestrates authentication and password reset flows.
+//
+// SECURITY: All cryptographic operations are delegated to interfaces
+// (PasswordHasher, TokenGenerator, RandomSaltGenerator) defined in pkg/auth.
+// The production wiring (in module.go) uses BcryptPasswordHasher,
+// JWTTokenGenerator, and CryptoRandomSaltGenerator - all using
+// industry-standard, slow, salted algorithms. The interfaces enable
+// testability without weakening production security guarantees.
 type AuthService struct {
-	userRepo     domain.UserRepository
-	orgRepo      domain.OrganizationRepository
-	emailService EmailService
+	userRepo        domain.UserRepository
+	orgRepo         domain.OrganizationRepository
+	emailService    EmailService
+	passwordHasher  auth.PasswordHasher
+	tokenGenerator  auth.TokenGenerator
+	saltGenerator   auth.RandomSaltGenerator
 }
 
-func NewAuthService(userRepo domain.UserRepository, orgRepo domain.OrganizationRepository, emailService EmailService) *AuthService {
+func NewAuthService(
+	userRepo domain.UserRepository,
+	orgRepo domain.OrganizationRepository,
+	emailService EmailService,
+	passwordHasher auth.PasswordHasher,
+	tokenGenerator auth.TokenGenerator,
+	saltGenerator auth.RandomSaltGenerator,
+) *AuthService {
 	return &AuthService{
-		userRepo:     userRepo,
-		orgRepo:      orgRepo,
-		emailService: emailService,
+		userRepo:       userRepo,
+		orgRepo:        orgRepo,
+		emailService:   emailService,
+		passwordHasher: passwordHasher,
+		tokenGenerator: tokenGenerator,
+		saltGenerator:  saltGenerator,
 	}
 }
+
 func (s *AuthService) Login(ctx context.Context, email, password string) (string, error) {
 	user, err := s.userRepo.FindByEmail(ctx, email)
 	if err != nil {
@@ -35,7 +58,8 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (string
 	if user == nil {
 		return "", ErrInvalidCredentials
 	}
-	if !auth.CheckPassword(password, user.Password()) {
+	// SECURITY: Constant-time comparison via bcrypt
+	if !s.passwordHasher.Verify(password, user.Password()) {
 		return "", ErrInvalidCredentials
 	}
 	org, err := s.orgRepo.FindByUserID(ctx, user.ID())
@@ -47,8 +71,9 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (string
 		orgID = org.ID()
 	}
 	role := string(user.Role())
-	return auth.GenerateToken(user.ID(), orgID, role, user.Salt())
+	return s.tokenGenerator.GenerateAuthToken(user.ID(), orgID, role, user.Salt())
 }
+
 func (s *AuthService) GetUserSalt(ctx context.Context, userID string) (string, error) {
 	u, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
@@ -59,6 +84,7 @@ func (s *AuthService) GetUserSalt(ctx context.Context, userID string) (string, e
 	}
 	return u.Salt(), nil
 }
+
 func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) error {
 	user, err := s.userRepo.FindByEmail(ctx, email)
 	if err != nil {
@@ -67,7 +93,7 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) er
 	if user == nil {
 		return nil
 	}
-	token, err := auth.GenerateToken(user.ID(), "", string(auth.PurposeReset), user.Salt())
+	token, err := s.tokenGenerator.GenerateResetToken(user.ID(), user.Salt())
 	if err != nil {
 		return err
 	}
@@ -76,8 +102,9 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) er
 	}()
 	return nil
 }
+
 func (s *AuthService) ResetPassword(ctx context.Context, token, newPassword string) error {
-	claims, err := auth.ParseTokenClaimsUnsafe(token)
+	claims, err := s.tokenGenerator.ParseUnsafe(token)
 	if err != nil {
 		return err
 	}
@@ -91,14 +118,15 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, newPassword stri
 	if user == nil {
 		return errors.New("user not found")
 	}
-	if _, err := auth.ValidateSignature(token, user.Salt()); err != nil {
+	// SECURITY: Verify signature BEFORE trusting the claims
+	if _, err := s.tokenGenerator.VerifySignature(token, user.Salt()); err != nil {
 		return errors.New("invalid or expired token")
 	}
-	hashed, err := auth.HashPassword(newPassword)
+	hashed, err := s.passwordHasher.Hash(newPassword)
 	if err != nil {
 		return err
 	}
-	newSalt, err := auth.GenerateRandomSalt()
+	newSalt, err := s.saltGenerator.Generate()
 	if err != nil {
 		return err
 	}

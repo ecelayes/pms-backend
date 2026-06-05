@@ -491,6 +491,8 @@ func (m *mockRatePlanRepo) Delete(ctx context.Context, id string) error {
 
 type mockPriceRuleRepo struct {
 	saveResult              error
+	saveErrOnNth            int
+	saveCount               int
 	findOverlappingResult   []*domain.PriceRule
 	findOverlappingErr      error
 	findByUnitTypeResult    []*domain.PriceRule
@@ -502,6 +504,10 @@ type mockPriceRuleRepo struct {
 }
 
 func (m *mockPriceRuleRepo) Save(ctx context.Context, pr *domain.PriceRule) error {
+	m.saveCount++
+	if m.saveErrOnNth > 0 && m.saveCount == m.saveErrOnNth {
+		return errors.New("save error on nth call")
+	}
 	return m.saveResult
 }
 func (m *mockPriceRuleRepo) FindOverlapping(ctx context.Context, unitTypeID, start, end string) ([]*domain.PriceRule, error) {
@@ -531,3 +537,531 @@ func (m *mockPriceRuleRepo) Delete(ctx context.Context, id string) error {
 }
 
 var _ = errors.New
+
+func TestPricingService_CalculateBasePrice_EmptyDates(t *testing.T) {
+	mockPriceRepo := &mockPriceRuleRepo{findOverlappingResult: []*domain.PriceRule{}}
+	svc := NewPricingService(mockPriceRepo, nil)
+
+	defaultPrice := vo.NewMoney(10000, "USD")
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+
+	result, err := svc.CalculateBasePrice(context.Background(), "ut-1", defaultPrice, start, end)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if result.Amount() != 0 {
+		t.Errorf("Expected 0 for empty dates, got: %d", result.Amount())
+	}
+}
+
+func TestPricingService_CalculateBasePrice_CurrencyMismatch(t *testing.T) {
+	mockPriceRepo := &mockPriceRuleRepo{findOverlappingResult: []*domain.PriceRule{}}
+	svc := NewPricingService(mockPriceRepo, nil)
+
+	defaultPrice := vo.NewMoney(10000, "USD")
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 6, 3, 0, 0, 0, 0, time.UTC)
+
+	// Currency mismatch shouldn't happen normally, but test it
+	result, err := svc.CalculateBasePrice(context.Background(), "ut-1", defaultPrice, start, end)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if result.Currency() != "USD" {
+		t.Errorf("Expected USD, got: %s", result.Currency())
+	}
+}
+
+func TestPricingService_GetRatePlan_RepoError(t *testing.T) {
+	repo := &mockRatePlanRepo{findByIDErr: errors.New("repo error")}
+	svc := NewPricingService(nil, repo)
+
+	_, err := svc.GetRatePlan(context.Background(), "rp-1")
+	if err == nil {
+		t.Error("Expected error from repo")
+	}
+}
+
+func TestPricingService_GetRatePlan_Success(t *testing.T) {
+	rp, _ := domain.NewRatePlan("prop-1", "Test", domain.MealPlan{}, domain.CancellationPolicy{}, domain.PaymentPolicy{})
+	repo := &mockRatePlanRepo{findByIDResult: rp}
+	svc := NewPricingService(nil, repo)
+
+	result, err := svc.GetRatePlan(context.Background(), rp.ID())
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Error("Expected non-nil result")
+	}
+}
+
+func TestPricingService_ListRatePlans_RepoError(t *testing.T) {
+	repo := &mockRatePlanRepo{findByPropertyIDErr: errors.New("repo error")}
+	svc := NewPricingService(nil, repo)
+
+	_, err := svc.ListRatePlans(context.Background(), "prop-1")
+	if err == nil {
+		t.Error("Expected error from repo")
+	}
+}
+
+func TestPricingService_UpdateRatePlan_GetByIDError(t *testing.T) {
+	repo := &mockRatePlanRepo{findByIDErr: errors.New("find error")}
+	svc := NewPricingService(nil, repo)
+
+	err := svc.UpdateRatePlan(context.Background(), "rp-1", "Name", "Desc", true)
+	if err == nil {
+		t.Error("Expected error from GetByID")
+	}
+}
+
+func TestPricingService_UpdateRatePlan_SaveError(t *testing.T) {
+	rp, _ := domain.NewRatePlan("prop-1", "Test", domain.MealPlan{}, domain.CancellationPolicy{}, domain.PaymentPolicy{})
+	repo := &mockRatePlanRepo{findByIDResult: rp, saveResult: errors.New("save error")}
+	svc := NewPricingService(nil, repo)
+
+	err := svc.UpdateRatePlan(context.Background(), rp.ID(), "Name", "Desc", true)
+	if err == nil {
+		t.Error("Expected error from Save")
+	}
+}
+
+func TestPricingService_DeleteRatePlan_Success(t *testing.T) {
+	repo := &mockRatePlanRepo{}
+	svc := NewPricingService(nil, repo)
+
+	err := svc.DeleteRatePlan(context.Background(), "rp-1")
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestPricingService_DeleteRatePlan_RepoError(t *testing.T) {
+	repo := &mockRatePlanRepo{deleteErr: errors.New("delete error")}
+	svc := NewPricingService(nil, repo)
+
+	err := svc.DeleteRatePlan(context.Background(), "rp-1")
+	if err == nil {
+		t.Error("Expected error from Delete")
+	}
+}
+
+func TestPricingService_GetRules_ByUnitType_Success(t *testing.T) {
+	rules := []*domain.PriceRule{}
+	repo := &mockPriceRuleRepo{findByUnitTypeResult: rules}
+	svc := NewPricingService(repo, nil)
+
+	result, err := svc.GetRules(context.Background(), "", "ut-1")
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Error("Expected non-nil result")
+	}
+}
+
+func TestPricingService_GetRules_ByProperty_Success(t *testing.T) {
+	rules := []*domain.PriceRule{}
+	repo := &mockPriceRuleRepo{findByPropertyIDResult: rules}
+	svc := NewPricingService(repo, nil)
+
+	result, err := svc.GetRules(context.Background(), "prop-1", "")
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Error("Expected non-nil result")
+	}
+}
+
+func TestPricingService_DeleteRule_RepoError(t *testing.T) {
+	repo := &mockPriceRuleRepo{deleteErr: errors.New("delete error")}
+	svc := NewPricingService(repo, nil)
+
+	err := svc.DeleteRule(context.Background(), "rule-1")
+	if err == nil {
+		t.Error("Expected error from Delete")
+	}
+}
+
+func TestPricingService_CalculateStayPrice_NoRatePlan(t *testing.T) {
+	mockPriceRepo := &mockPriceRuleRepo{findOverlappingResult: []*domain.PriceRule{}}
+	svc := NewPricingService(mockPriceRepo, nil)
+
+	defaultPrice := vo.NewMoney(10000, "USD")
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 6, 2, 0, 0, 0, 0, time.UTC)
+
+	result, err := svc.CalculateStayPrice(context.Background(), "ut-1", "", defaultPrice, start, end, 2, 0)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if result.Amount() != 10000 {
+		t.Errorf("Expected 10000, got: %d", result.Amount())
+	}
+}
+func TestPricingService_CalculateStayPrice_RepoError(t *testing.T) {
+	mockPriceRepo := &mockPriceRuleRepo{findOverlappingErr: errors.New("repo error")}
+	svc := NewPricingService(mockPriceRepo, nil)
+	defaultPrice := vo.NewMoney(10000, "USD")
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 6, 2, 0, 0, 0, 0, time.UTC)
+	_, err := svc.CalculateStayPrice(context.Background(), "ut-1", "", defaultPrice, start, end, 1, 0)
+	if err == nil {
+		t.Error("Expected error from repo")
+	}
+}
+
+func TestPricingService_CalculateStayPrice_RatePlanNotFound(t *testing.T) {
+	mockPriceRepo := &mockPriceRuleRepo{findOverlappingResult: []*domain.PriceRule{}}
+	mockRatePlanRepo := &mockRatePlanRepo{findByIDResult: nil}
+	svc := NewPricingService(mockPriceRepo, mockRatePlanRepo)
+	defaultPrice := vo.NewMoney(10000, "USD")
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 6, 2, 0, 0, 0, 0, time.UTC)
+
+	result, err := svc.CalculateStayPrice(context.Background(), "ut-1", "rp-1", defaultPrice, start, end, 2, 0)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if result.Amount() != 10000 {
+		t.Errorf("Expected 10000, got: %d", result.Amount())
+	}
+}
+
+func TestPricingService_CalculateStayPrice_RatePlanRepoError(t *testing.T) {
+	mockPriceRepo := &mockPriceRuleRepo{findOverlappingResult: []*domain.PriceRule{}}
+	mockRatePlanRepo := &mockRatePlanRepo{findByIDErr: errors.New("repo error")}
+	svc := NewPricingService(mockPriceRepo, mockRatePlanRepo)
+
+	defaultPrice := vo.NewMoney(10000, "USD")
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 6, 2, 0, 0, 0, 0, time.UTC)
+
+	_, err := svc.CalculateStayPrice(context.Background(), "ut-1", "rp-1", defaultPrice, start, end, 2, 0)
+	if err == nil {
+		t.Error("Expected error from rate plan repo")
+	}
+}
+
+func TestPricingService_CalculateStayPrice_WithChildren(t *testing.T) {
+	rp, _ := domain.NewRatePlan("prop-1", "Test", domain.MealPlan{Included: false, PricePerPax: 500, Type: 1}, domain.CancellationPolicy{IsRefundable: true, Rules: []domain.CancellationRule{}}, domain.PaymentPolicy{})
+	mockRatePlanRepo := &mockRatePlanRepo{findByIDResult: rp}
+	mockPriceRepo := &mockPriceRuleRepo{findOverlappingResult: []*domain.PriceRule{}}
+	svc := NewPricingService(mockPriceRepo, mockRatePlanRepo)
+
+	defaultPrice := vo.NewMoney(10000, "USD")
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 6, 3, 0, 0, 0, 0, time.UTC)
+
+	// 2 adults + 2 children = 4 pax, 500 per pax per day, 2 days = 4000
+	// Base: 10000 * 2 = 20000, Total: 24000
+	result, err := svc.CalculateStayPrice(context.Background(), "ut-1", rp.ID(), defaultPrice, start, end, 2, 2)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if result.Amount() != 24000 {
+		t.Errorf("Expected 24000, got: %d", result.Amount())
+	}
+}
+
+func TestPricingService_CreateRatePlan_SaveError(t *testing.T) {
+	repo := &mockRatePlanRepo{saveResult: errors.New("save error")}
+	svc := NewPricingService(nil, repo)
+	_, err := svc.CreateRatePlan(context.Background(), "prop-1", "Test", domain.MealPlan{}, domain.CancellationPolicy{}, domain.PaymentPolicy{})
+	if err == nil {
+		t.Error("Expected save error")
+	}
+}
+
+func TestPricingService_CalculateBasePrice_RepoError(t *testing.T) {
+	repo := &mockPriceRuleRepo{findOverlappingErr: errors.New("repo error")}
+	svc := NewPricingService(repo, nil)
+	_, err := svc.CalculateBasePrice(context.Background(), "ut-1", vo.NewMoney(10000, "USD"), time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2024, 6, 2, 0, 0, 0, 0, time.UTC))
+	if err == nil {
+		t.Error("Expected repo error")
+	}
+}
+
+func TestPricingService_CalculateBasePrice_WithOverlappingRules(t *testing.T) {
+	ruleStart := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	ruleEnd := time.Date(2024, 6, 3, 0, 0, 0, 0, time.UTC)
+	ruleRange, _ := vo.NewDateRange(ruleStart, ruleEnd.Add(-time.Second))
+	rule := domain.NewPriceRule("ut-1", ruleRange, vo.NewMoney(20000, "USD"))
+	repo := &mockPriceRuleRepo{findOverlappingResult: []*domain.PriceRule{rule}}
+	svc := NewPricingService(repo, nil)
+	defaultPrice := vo.NewMoney(10000, "USD")
+	result, err := svc.CalculateBasePrice(context.Background(), "ut-1", defaultPrice, ruleStart, ruleEnd)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if result.Amount() == 0 {
+		t.Error("Expected non-zero total")
+	}
+}
+
+func TestPricingService_CalculateCancellationPenalty_RepoError(t *testing.T) {
+	repo := &mockRatePlanRepo{findByIDErr: errors.New("repo error")}
+	svc := NewPricingService(nil, repo)
+	resStart := time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC)
+	cancelDate := time.Date(2024, 6, 28, 0, 0, 0, 0, time.UTC)
+	_, err := svc.CalculateCancellationPenalty(context.Background(), "rp-1", resStart, cancelDate, vo.NewMoney(10000, "USD"))
+	if err == nil {
+		t.Error("Expected repo error")
+	}
+}
+
+func TestPricingService_CalculateCancellationPenalty_WithRules(t *testing.T) {
+	rule := domain.CancellationRule{}
+	_ = rule
+	rp, _ := domain.NewRatePlan("prop-1", "Refundable", domain.MealPlan{}, domain.CancellationPolicy{IsRefundable: true, Rules: []domain.CancellationRule{{HoursBeforeCheckIn: 168, PenaltyType: domain.PenaltyPercentage, PenaltyValue: 50}}}, domain.PaymentPolicy{})
+	repo := &mockRatePlanRepo{findByIDResult: rp}
+	svc := NewPricingService(nil, repo)
+	resStart := time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC)
+	cancelDate := time.Date(2024, 6, 25, 0, 0, 0, 0, time.UTC)
+	penalty, err := svc.CalculateCancellationPenalty(context.Background(), rp.ID(), resStart, cancelDate, vo.NewMoney(100000, "USD"))
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if penalty.Amount() == 0 {
+		t.Error("Expected non-zero penalty")
+	}
+}
+
+func TestPricingService_SetPriceRule_RepoError(t *testing.T) {
+	repo := &mockPriceRuleRepo{findOverlappingErr: errors.New("repo error")}
+	svc := NewPricingService(repo, nil)
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 6, 3, 0, 0, 0, 0, time.UTC)
+	err := svc.SetPriceRule(context.Background(), "ut-1", start, end, vo.NewMoney(20000, "USD"))
+	if err == nil {
+		t.Error("Expected repo error")
+	}
+}
+
+func TestPricingService_SetPriceRule_InvalidDateRangeExtra(t *testing.T) {
+	repo := &mockPriceRuleRepo{}
+	svc := NewPricingService(repo, nil)
+	start := time.Date(2024, 6, 3, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	err := svc.SetPriceRule(context.Background(), "ut-1", start, end, vo.NewMoney(20000, "USD"))
+	if err == nil {
+		t.Error("Expected error for invalid date range")
+	}
+}
+
+func TestPricingService_SetPriceRule_SaveError(t *testing.T) {
+	repo := &mockPriceRuleRepo{findOverlappingResult: []*domain.PriceRule{}, saveResult: errors.New("save error")}
+	svc := NewPricingService(repo, nil)
+	start := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 6, 3, 0, 0, 0, 0, time.UTC)
+	err := svc.SetPriceRule(context.Background(), "ut-1", start, end, vo.NewMoney(20000, "USD"))
+	if err == nil {
+		t.Error("Expected save error")
+	}
+}
+
+func TestPricingService_CalculateCancellationPenalty_NegativeHours(t *testing.T) {
+	rp, _ := domain.NewRatePlan("prop-1", "Refundable", domain.MealPlan{}, domain.CancellationPolicy{IsRefundable: true, Rules: []domain.CancellationRule{}}, domain.PaymentPolicy{})
+	repo := &mockRatePlanRepo{findByIDResult: rp}
+	svc := NewPricingService(nil, repo)
+	resStart := time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC)
+	cancelDate := time.Date(2024, 7, 2, 0, 0, 0, 0, time.UTC) // after start
+	totalPrice := vo.NewMoney(10000, "USD")
+	penalty, err := svc.CalculateCancellationPenalty(context.Background(), rp.ID(), resStart, cancelDate, totalPrice)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if penalty.Amount() != 10000 {
+		t.Errorf("Expected 10000, got: %d", penalty.Amount())
+	}
+}
+
+func TestPricingService_CalculateCancellationPenalty_FixedAmountV2(t *testing.T) {
+	rp, _ := domain.NewRatePlan("prop-1", "Test", domain.MealPlan{}, domain.CancellationPolicy{IsRefundable: true, Rules: []domain.CancellationRule{{HoursBeforeCheckIn: 24, PenaltyType: domain.PenaltyFixedAmount, PenaltyValue: 5000}}}, domain.PaymentPolicy{})
+	repo := &mockRatePlanRepo{findByIDResult: rp}
+	svc := NewPricingService(nil, repo)
+	resStart := time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC)
+	cancelDate := time.Date(2024, 6, 30, 12, 0, 0, 0, time.UTC) // 12 hours before
+	totalPrice := vo.NewMoney(10000, "USD")
+	penalty, err := svc.CalculateCancellationPenalty(context.Background(), rp.ID(), resStart, cancelDate, totalPrice)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if penalty.Amount() != 5000 {
+		t.Errorf("Expected 5000, got: %d", penalty.Amount())
+	}
+}
+
+func TestPricingService_CalculateCancellationPenalty_NightsNotSupportedV2(t *testing.T) {
+	rp, _ := domain.NewRatePlan("prop-1", "Test", domain.MealPlan{}, domain.CancellationPolicy{IsRefundable: true, Rules: []domain.CancellationRule{{HoursBeforeCheckIn: 24, PenaltyType: domain.PenaltyNights, PenaltyValue: 1}}}, domain.PaymentPolicy{})
+	repo := &mockRatePlanRepo{findByIDResult: rp}
+	svc := NewPricingService(nil, repo)
+	resStart := time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC)
+	cancelDate := time.Date(2024, 6, 30, 12, 0, 0, 0, time.UTC)
+	totalPrice := vo.NewMoney(10000, "USD")
+	_, err := svc.CalculateCancellationPenalty(context.Background(), rp.ID(), resStart, cancelDate, totalPrice)
+	if err == nil {
+		t.Error("Expected error for nights penalty")
+	}
+}
+
+func TestPricingService_CalculateCancellationPenalty_NoMatchingRule(t *testing.T) {
+	rp, _ := domain.NewRatePlan("prop-1", "Test", domain.MealPlan{}, domain.CancellationPolicy{IsRefundable: true, Rules: []domain.CancellationRule{{HoursBeforeCheckIn: 1, PenaltyType: domain.PenaltyFixedAmount, PenaltyValue: 5000}}}, domain.PaymentPolicy{})
+	repo := &mockRatePlanRepo{findByIDResult: rp}
+	svc := NewPricingService(nil, repo)
+	resStart := time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC)
+	cancelDate := time.Date(2024, 6, 30, 23, 0, 0, 0, time.UTC) // 1 hour before, rule needs less than 1 hour
+	totalPrice := vo.NewMoney(10000, "USD")
+	penalty, err := svc.CalculateCancellationPenalty(context.Background(), rp.ID(), resStart, cancelDate, totalPrice)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if penalty.Amount() != 0 {
+		t.Errorf("Expected 0, got: %d", penalty.Amount())
+	}
+}
+
+func TestPricingService_CalculateCancellationPenalty_NotFound(t *testing.T) {
+	repo := &mockRatePlanRepo{findByIDResult: nil}
+	svc := NewPricingService(nil, repo)
+	resStart := time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC)
+	cancelDate := time.Date(2024, 6, 28, 0, 0, 0, 0, time.UTC)
+	totalPrice := vo.NewMoney(10000, "USD")
+	_, err := svc.CalculateCancellationPenalty(context.Background(), "rp-1", resStart, cancelDate, totalPrice)
+	if err == nil {
+		t.Error("Expected not found error")
+	}
+}
+
+func TestPricingService_SetPriceRule_SplitBothSides(t *testing.T) {
+	// Existing rule is wider than new range, should split into left and right
+	existingRange, _ := vo.NewDateRange(time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2024, 6, 10, 23, 59, 59, 0, time.UTC))
+	existingRule := domain.ReconstitutePriceRule("pr-1", "ut-1", existingRange, vo.NewMoney(10000, "USD"), time.Now())
+	mockPriceRepo := &mockPriceRuleRepo{
+		findOverlappingResult: []*domain.PriceRule{existingRule},
+	}
+	svc := NewPricingService(mockPriceRepo, nil)
+	start := time.Date(2024, 6, 3, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 6, 5, 23, 59, 59, 0, time.UTC)
+	price := vo.NewMoney(15000, "USD")
+	err := svc.SetPriceRule(context.Background(), "ut-1", start, end, price)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestPricingService_SetPriceRule_DeleteError(t *testing.T) {
+	existingRange, _ := vo.NewDateRange(time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2024, 6, 5, 23, 59, 59, 0, time.UTC))
+	existingRule := domain.ReconstitutePriceRule("pr-1", "ut-1", existingRange, vo.NewMoney(10000, "USD"), time.Now())
+	repo := &mockPriceRuleRepo{
+		findOverlappingResult: []*domain.PriceRule{existingRule},
+		deleteErr:             errors.New("delete error"),
+	}
+	svc := NewPricingService(repo, nil)
+	start := time.Date(2024, 6, 3, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 6, 4, 23, 59, 59, 0, time.UTC)
+	err := svc.SetPriceRule(context.Background(), "ut-1", start, end, vo.NewMoney(15000, "USD"))
+	if err == nil {
+		t.Error("Expected delete error")
+	}
+}
+
+func TestPricingService_SetPriceRule_SaveErrorOnSplit(t *testing.T) {
+	existingRange, _ := vo.NewDateRange(time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2024, 6, 10, 23, 59, 59, 0, time.UTC))
+	existingRule := domain.ReconstitutePriceRule("pr-1", "ut-1", existingRange, vo.NewMoney(10000, "USD"), time.Now())
+	repo := &mockPriceRuleRepo{
+		findOverlappingResult: []*domain.PriceRule{existingRule},
+		saveResult:            errors.New("save error"),
+	}
+	svc := NewPricingService(repo, nil)
+	start := time.Date(2024, 6, 3, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 6, 5, 23, 59, 59, 0, time.UTC)
+	err := svc.SetPriceRule(context.Background(), "ut-1", start, end, vo.NewMoney(15000, "USD"))
+	if err == nil {
+		t.Error("Expected save error")
+	}
+}
+
+func TestPricingService_CalculateBasePrice_CurrencyMismatchInRule(t *testing.T) {
+	// Test that the function doesn't crash when there's a default price currency mismatch
+	// Since we control the rules, this is hard to trigger with valid data
+	// But we can test with a default price and overlapping rule
+	ruleStart := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	ruleEnd := time.Date(2024, 6, 3, 0, 0, 0, 0, time.UTC)
+	ruleRange, _ := vo.NewDateRange(ruleStart, ruleEnd.Add(-time.Second))
+	rule := domain.NewPriceRule("ut-1", ruleRange, vo.NewMoney(20000, "USD"))
+	repo := &mockPriceRuleRepo{findOverlappingResult: []*domain.PriceRule{rule}}
+	svc := NewPricingService(repo, nil)
+	defaultPrice := vo.NewMoney(10000, "USD")
+	result, err := svc.CalculateBasePrice(context.Background(), "ut-1", defaultPrice, ruleStart, ruleEnd)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if result == (vo.Money{}) {
+		t.Error("Expected non-zero money")
+	}
+}
+
+func TestPricingService_CalculateCancellationPenalty_MultipleMatchingRules(t *testing.T) {
+	// Multiple rules that match - the one with the smallest HoursBeforeCheckIn should win
+	rp, _ := domain.NewRatePlan("prop-1", "Test", domain.MealPlan{}, domain.CancellationPolicy{IsRefundable: true, Rules: []domain.CancellationRule{
+		{HoursBeforeCheckIn: 168, PenaltyType: domain.PenaltyPercentage, PenaltyValue: 30},
+		{HoursBeforeCheckIn: 24, PenaltyType: domain.PenaltyPercentage, PenaltyValue: 50},
+		{HoursBeforeCheckIn: 48, PenaltyType: domain.PenaltyPercentage, PenaltyValue: 40},
+	}}, domain.PaymentPolicy{})
+	repo := &mockRatePlanRepo{findByIDResult: rp}
+	svc := NewPricingService(nil, repo)
+	resStart := time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC)
+	cancelDate := time.Date(2024, 6, 30, 12, 0, 0, 0, time.UTC) // 12 hours before
+	totalPrice := vo.NewMoney(10000, "USD")
+	penalty, err := svc.CalculateCancellationPenalty(context.Background(), rp.ID(), resStart, cancelDate, totalPrice)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	// 12 hours < 24 hours, so the 24-hour rule applies: 50% of 10000 = 5000
+	if penalty.Amount() != 5000 {
+		t.Errorf("Expected 5000, got: %d", penalty.Amount())
+	}
+}
+
+func TestPricingService_SetPriceRule_RightSideSaveError(t *testing.T) {
+	// Set up a scenario where the left save succeeds but the right save fails
+	existingRange, _ := vo.NewDateRange(time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2024, 6, 10, 23, 59, 59, 0, time.UTC))
+	existingRule := domain.ReconstitutePriceRule("pr-1", "ut-1", existingRange, vo.NewMoney(10000, "USD"), time.Now())
+
+	// Mock that fails on the second save (right side)
+	mockRepo := &mockPriceRuleRepo{
+		findOverlappingResult: []*domain.PriceRule{existingRule},
+		saveErrOnNth:          2,
+	}
+	svc := NewPricingService(mockRepo, nil)
+	start := time.Date(2024, 6, 3, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2024, 6, 5, 23, 59, 59, 0, time.UTC)
+	err := svc.SetPriceRule(context.Background(), "ut-1", start, end, vo.NewMoney(15000, "USD"))
+	if err == nil {
+		t.Error("Expected error from right side save")
+	}
+}
+
+func TestPricingService_CalculateBasePrice_CurrencyMismatchTriggersAddError(t *testing.T) {
+	// Create a rule with a different currency than default price
+	// This should trigger the total.Add error in CalculateBasePrice
+	ruleStart := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	ruleEnd := time.Date(2024, 6, 2, 0, 0, 0, 0, time.UTC)
+	ruleRange, _ := vo.NewDateRange(ruleStart, ruleEnd.Add(-time.Second))
+	// Rule with USD, but default with USD - they must match for total.Add to succeed
+	// But if we make the rule price with different currency than the default price,
+	// it would cause the Add error
+	// Since NewPriceRule doesn't validate, we can create a rule with EUR
+	rule := domain.NewPriceRule("ut-1", ruleRange, vo.NewMoney(20000, "EUR"))
+	repo := &mockPriceRuleRepo{findOverlappingResult: []*domain.PriceRule{rule}}
+	svc := NewPricingService(repo, nil)
+	defaultPrice := vo.NewMoney(10000, "USD")
+	_, err := svc.CalculateBasePrice(context.Background(), "ut-1", defaultPrice, ruleStart, ruleEnd)
+	if err == nil {
+		t.Error("Expected currency mismatch error")
+	}
+}

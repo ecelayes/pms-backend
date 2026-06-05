@@ -1,139 +1,255 @@
 package http
 
 import (
-	"encoding/json"
+	"errors"
+	"time"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/ecelayes/pms-backend/internal/pricing/application"
+	"github.com/ecelayes/pms-backend/internal/pricing/domain"
+	"github.com/ecelayes/pms-backend/internal/shared/vo"
 	"github.com/labstack/echo/v4"
 )
 
-func TestSetPriceRequest_JSON(t *testing.T) {
-	jsonStr := `{"unit_type_id":"ut-123","start":"2024-06-01","end":"2024-06-05","price":150.50,"currency":"EUR"}`
-	var req SetPriceRequest
-	err := json.Unmarshal([]byte(jsonStr), &req)
-	if err != nil {
-		t.Errorf("Failed to unmarshal: %v", err)
-	}
-	if req.UnitTypeID != "ut-123" {
-		t.Errorf("Expected unit_type_id 'ut-123', got '%s'", req.UnitTypeID)
-	}
-	if req.Start != "2024-06-01" {
-		t.Errorf("Expected start '2024-06-01', got '%s'", req.Start)
-	}
-	if req.End != "2024-06-05" {
-		t.Errorf("Expected end '2024-06-05', got '%s'", req.End)
-	}
-	if req.Price != 150.50 {
-		t.Errorf("Expected price 150.50, got %f", req.Price)
-	}
-	if req.Currency != "EUR" {
-		t.Errorf("Expected currency 'EUR', got '%s'", req.Currency)
-	}
+func newTestPriceRule() *domain.PriceRule {
+	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2025, 1, 31, 0, 0, 0, 0, time.UTC)
+	dr, _ := vo.NewDateRange(start, end)
+	return domain.NewPriceRule("ut-1", dr, vo.NewMoney(10000, "USD"))
 }
 
-func TestBulkUpdate_InvalidJSON(t *testing.T) {
+func TestPricingHandler_BulkUpdate_InvalidJSON(t *testing.T) {
 	e := echo.New()
-	reqBody := `{invalid json}`
-	req := httptest.NewRequest(http.MethodPost, "/pricing/bulk", strings.NewReader(reqBody))
+	reqBody := `{invalid}`
+	req := httptest.NewRequest(http.MethodPost, "/pricing", strings.NewReader(reqBody))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	h := &PricingHandler{service: nil}
+	h := NewPricingHandler(&mockPricingService{})
 	_ = h.BulkUpdate(c)
-	
+
 	if rec.Code != http.StatusBadRequest {
-		t.Errorf("Expected status 400, got %d", rec.Code)
+		t.Errorf("Expected 400, got %d", rec.Code)
 	}
 }
 
-func TestBulkUpdate_InvalidStartDate(t *testing.T) {
+func TestPricingHandler_BulkUpdate_InvalidStartDate(t *testing.T) {
 	e := echo.New()
-	reqBody := `{"unit_type_id":"ut-123","start":"invalid-date","end":"2024-06-05","price":150.00,"currency":"USD"}`
-	req := httptest.NewRequest(http.MethodPost, "/pricing/bulk", strings.NewReader(reqBody))
+	reqBody := `{"unit_type_id":"ut-1","start":"bad","end":"2025-01-31","price":100,"currency":"USD"}`
+	req := httptest.NewRequest(http.MethodPost, "/pricing", strings.NewReader(reqBody))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	h := &PricingHandler{service: nil}
+	h := NewPricingHandler(&mockPricingService{})
 	_ = h.BulkUpdate(c)
-	
+
 	if rec.Code != http.StatusBadRequest {
-		t.Errorf("Expected status 400, got %d", rec.Code)
+		t.Errorf("Expected 400, got %d", rec.Code)
 	}
 }
 
-func TestBulkUpdate_InvalidEndDate(t *testing.T) {
+func TestPricingHandler_BulkUpdate_InvalidEndDate(t *testing.T) {
 	e := echo.New()
-	reqBody := `{"unit_type_id":"ut-123","start":"2024-06-01","end":"invalid-date","price":150.00,"currency":"USD"}`
-	req := httptest.NewRequest(http.MethodPost, "/pricing/bulk", strings.NewReader(reqBody))
+	reqBody := `{"unit_type_id":"ut-1","start":"2025-01-01","end":"bad","price":100,"currency":"USD"}`
+	req := httptest.NewRequest(http.MethodPost, "/pricing", strings.NewReader(reqBody))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	h := &PricingHandler{service: nil}
+	h := NewPricingHandler(&mockPricingService{})
 	_ = h.BulkUpdate(c)
-	
+
 	if rec.Code != http.StatusBadRequest {
-		t.Errorf("Expected status 400, got %d", rec.Code)
+		t.Errorf("Expected 400, got %d", rec.Code)
 	}
 }
 
-func TestBulkUpdate_NegativePrice(t *testing.T) {
+func TestPricingHandler_BulkUpdate_NegativePrice(t *testing.T) {
 	e := echo.New()
-	reqBody := `{"unit_type_id":"ut-123","start":"2024-06-01","end":"2024-06-05","price":-50.00,"currency":"USD"}`
-	req := httptest.NewRequest(http.MethodPost, "/pricing/bulk", strings.NewReader(reqBody))
+	reqBody := `{"unit_type_id":"ut-1","start":"2025-01-01","end":"2025-01-31","price":-10,"currency":"USD"}`
+	req := httptest.NewRequest(http.MethodPost, "/pricing", strings.NewReader(reqBody))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	h := &PricingHandler{service: nil}
+	h := NewPricingHandler(&mockPricingService{})
 	_ = h.BulkUpdate(c)
-	
+
 	if rec.Code != http.StatusBadRequest {
-		t.Errorf("Expected status 400, got %d", rec.Code)
+		t.Errorf("Expected 400, got %d", rec.Code)
 	}
 }
 
-func TestGetRules_MissingParams(t *testing.T) {
+func TestPricingHandler_BulkUpdate_DefaultCurrency(t *testing.T) {
 	e := echo.New()
-	req := httptest.NewRequest(http.MethodGet, "/pricing/rules", nil)
+	reqBody := `{"unit_type_id":"ut-1","start":"2025-01-01","end":"2025-01-31","price":100}`
+	req := httptest.NewRequest(http.MethodPost, "/pricing", strings.NewReader(reqBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	h := &PricingHandler{service: nil}
+	svc := &mockPricingService{}
+	h := NewPricingHandler(svc)
+	_ = h.BulkUpdate(c)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected 200, got %d", rec.Code)
+	}
+}
+
+func TestPricingHandler_BulkUpdate_InvalidDateRange(t *testing.T) {
+	e := echo.New()
+	reqBody := `{"unit_type_id":"ut-1","start":"2025-01-01","end":"2025-01-31","price":100,"currency":"USD"}`
+	req := httptest.NewRequest(http.MethodPost, "/pricing", strings.NewReader(reqBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	svc := &mockPricingService{setRuleErr: vo.ErrinvalidDateRange}
+	h := NewPricingHandler(svc)
+	_ = h.BulkUpdate(c)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", rec.Code)
+	}
+}
+
+func TestPricingHandler_BulkUpdate_Error(t *testing.T) {
+	e := echo.New()
+	reqBody := `{"unit_type_id":"ut-1","start":"2025-01-01","end":"2025-01-31","price":100,"currency":"USD"}`
+	req := httptest.NewRequest(http.MethodPost, "/pricing", strings.NewReader(reqBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	svc := &mockPricingService{setRuleErr: errors.New("db error")}
+	h := NewPricingHandler(svc)
+	_ = h.BulkUpdate(c)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("Expected 500, got %d", rec.Code)
+	}
+}
+
+func TestPricingHandler_GetRules_MissingParams(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/pricing", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	h := NewPricingHandler(&mockPricingService{})
 	_ = h.GetRules(c)
-	
+
 	if rec.Code != http.StatusBadRequest {
-		t.Errorf("Expected status 400, got %d", rec.Code)
+		t.Errorf("Expected 400, got %d", rec.Code)
 	}
 }
 
-func TestBulkUpdate_ValidJSONParsing(t *testing.T) {
+func TestPricingHandler_GetRules_NilResult(t *testing.T) {
 	e := echo.New()
-	// Only test parsing - use negative price to stop before service call
-	reqBody := `{"unit_type_id":"ut-123","start":"2024-06-01","end":"2024-06-05","price":-1,"currency":"USD"}`
-	req := httptest.NewRequest(http.MethodPost, "/pricing/bulk", strings.NewReader(reqBody))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req := httptest.NewRequest(http.MethodGet, "/pricing?unit_type_id=ut-1", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
-	h := &PricingHandler{service: nil}
-	_ = h.BulkUpdate(c)
-	
-	// Should fail on negative price validation before reaching service
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("Expected status 400, got %d", rec.Code)
+	svc := &mockPricingService{getRulesResult: nil}
+	h := NewPricingHandler(svc)
+	_ = h.GetRules(c)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected 200, got %d", rec.Code)
 	}
 }
 
-func BenchmarkSetPriceRequestParsing(b *testing.B) {
-	jsonStr := `{"unit_type_id":"ut-123","start":"2024-06-01","end":"2024-06-05","price":150.50,"currency":"EUR"}`
-	for i := 0; i < b.N; i++ {
-		var req SetPriceRequest
-		_ = json.Unmarshal([]byte(jsonStr), &req)
+func TestPricingHandler_GetRules_Success(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/pricing?unit_type_id=ut-1", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	svc := &mockPricingService{getRulesResult: []*domain.PriceRule{newTestPriceRule()}}
+	h := NewPricingHandler(svc)
+	_ = h.GetRules(c)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected 200, got %d", rec.Code)
+	}
+}
+
+func TestPricingHandler_GetRules_Error(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/pricing?unit_type_id=ut-1", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	svc := &mockPricingService{getRulesErr: errors.New("db error")}
+	h := NewPricingHandler(svc)
+	_ = h.GetRules(c)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("Expected 500, got %d", rec.Code)
+	}
+}
+
+func TestPricingHandler_DeleteRule_Success(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodDelete, "/pricing/pr-1", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("pr-1")
+
+	svc := &mockPricingService{}
+	h := NewPricingHandler(svc)
+	_ = h.DeleteRule(c)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected 200, got %d", rec.Code)
+	}
+}
+
+func TestPricingHandler_DeleteRule_NotFound(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodDelete, "/pricing/pr-1", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("pr-1")
+
+	svc := &mockPricingService{deleteRuleErr: application.ErrNotFound}
+	h := NewPricingHandler(svc)
+	_ = h.DeleteRule(c)
+
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("Expected 404, got %d", rec.Code)
+	}
+}
+
+func TestPricingHandler_DeleteRule_Error(t *testing.T) {
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodDelete, "/pricing/pr-1", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("pr-1")
+
+	svc := &mockPricingService{deleteRuleErr: errors.New("db error")}
+	h := NewPricingHandler(svc)
+	_ = h.DeleteRule(c)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("Expected 500, got %d", rec.Code)
+	}
+}
+
+func TestPricingHandler_NewPricingHandler(t *testing.T) {
+	svc := &mockPricingService{}
+	h := NewPricingHandler(svc)
+	if h == nil || h.service == nil {
+		t.Fatal("handler or service nil")
 	}
 }

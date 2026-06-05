@@ -74,8 +74,8 @@ func (s *BaseSuite) GetAdminTokenAndOrg() (string, string) {
 	userID, _ := uuid.NewV7()
 	email := "owner@test.com"
 	pass := "pass"
-	hash, _ := auth.HashPassword(pass)
-	salt, _ := auth.GenerateRandomSalt()
+	hash, _ := auth.NewBcryptPasswordHasher().Hash(pass)
+	salt, _ := auth.NewCryptoRandomSaltGenerator().Generate()
 
 	s.db.Exec(ctx, `INSERT INTO organizations (id, name, code, created_at, updated_at) VALUES ($1, 'Test Corp', 'TEST', NOW(), NOW())`, orgID.String())
 	s.db.Exec(ctx, `INSERT INTO users (id, email, password, salt, role, created_at, updated_at) VALUES ($1, $2, $3, $4, 'owner', NOW(), NOW())`, userID.String(), email, hash, salt)
@@ -92,8 +92,8 @@ func (s *BaseSuite) GetSuperAdminToken() string {
 	userID, _ := uuid.NewV7()
 	email := "super@admin.com"
 	pass := "supersecret"
-	hash, _ := auth.HashPassword(pass)
-	salt, _ := auth.GenerateRandomSalt()
+	hash, _ := auth.NewBcryptPasswordHasher().Hash(pass)
+	salt, _ := auth.NewCryptoRandomSaltGenerator().Generate()
 
 	_, err := s.db.Exec(ctx, `INSERT INTO users (id, email, password, salt, role, created_at, updated_at) VALUES ($1, $2, $3, $4, 'super_admin', NOW(), NOW())`, userID.String(), email, hash, salt)
 	if err != nil { s.T().Fatal(err) }

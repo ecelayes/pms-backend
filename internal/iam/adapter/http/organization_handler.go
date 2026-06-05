@@ -11,10 +11,10 @@ import (
 )
 
 type OrganizationHandler struct {
-	service *application.OrganizationService
+	service OrganizationService
 }
 
-func NewOrganizationHandler(service *application.OrganizationService) *OrganizationHandler {
+func NewOrganizationHandler(service OrganizationService) *OrganizationHandler {
 	return &OrganizationHandler{service: service}
 }
 
@@ -110,3 +110,6 @@ func (h *OrganizationHandler) toOrganizationDTO(o *domain.Organization) dto.Orga
 		Code: o.Code(),
 	}
 }
+
+// Verify interface compliance
+var _ OrganizationService = (*application.OrganizationService)(nil)

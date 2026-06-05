@@ -13,10 +13,10 @@ import (
 )
 
 type PropertyHandler struct {
-	service *application.CatalogService
+	service PropertyService
 }
 
-func NewPropertyHandler(service *application.CatalogService) *PropertyHandler {
+func NewPropertyHandler(service PropertyService) *PropertyHandler {
 	return &PropertyHandler{service: service}
 }
 
